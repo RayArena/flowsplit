@@ -6,12 +6,7 @@ import { Toaster } from "sonner";
 import { isClerkConfigured } from "@/lib/clerk-config";
 import { SetupBanner } from "@/components/setup/SetupBanner";
 
-// Conditionally import ClerkProvider — avoids crash when key is missing
-let ClerkProvider: React.ComponentType<{ children: React.ReactNode }> | null = null;
-if (isClerkConfigured()) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  ClerkProvider = require("@clerk/nextjs").ClerkProvider;
-}
+import { ClerkProvider } from "@clerk/nextjs";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -63,7 +58,7 @@ export default function RootLayout({
     </html>
   );
 
-  if (ClerkProvider) {
+  if (isClerkConfigured()) {
     return <ClerkProvider>{content}</ClerkProvider>;
   }
 
