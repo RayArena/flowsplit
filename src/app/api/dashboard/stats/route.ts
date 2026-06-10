@@ -4,6 +4,7 @@ import connectDB from "@/lib/db";
 import Expense from "@/models/Expense";
 import Group from "@/models/Group";
 import Settlement from "@/models/Settlement";
+import { generateOptimizationResult } from "@/features/settlements/balanceEngine";
 
 export async function GET() {
   try {
@@ -74,6 +75,135 @@ export async function GET() {
       });
     }
 
+    // Category Distribution calculation
+    const categorySum: Record<string, number> = {};
+    let totalAllExpenses = 0;
+    for (const e of expenses) {
+      const cat = e.category || "other";
+      categorySum[cat] = (categorySum[cat] || 0) + e.amount;
+      totalAllExpenses += e.amount;
+    }
+
+    const categoryColorMap: Record<string, string> = {
+      food: "#f97316",
+      transport: "#3b82f6",
+      accommodation: "#8b5cf6",
+      entertainment: "#ec4899",
+      utilities: "#fbbf24",
+      shopping: "#a855f7",
+      health: "#10b981",
+      other: "#64748b",
+    };
+
+    const categoryNameMap: Record<string, string> = {
+      food: "Food & Drinks",
+      transport: "Transport",
+      accommodation: "Accommodation",
+      entertainment: "Entertainment",
+      utilities: "Utilities",
+      shopping: "Shopping",
+      health: "Health",
+      other: "Other",
+    };
+
+    const categoryDistribution = Object.keys(categoryNameMap).map((cat) => {
+      const amount = categorySum[cat] || 0;
+      const pct = totalAllExpenses > 0 ? Math.round((amount / totalAllExpenses) * 100) : 0;
+      return {
+        name: categoryNameMap[cat],
+        value: pct,
+        color: categoryColorMap[cat] || "#64748b",
+      };
+    }).filter(c => c.value > 0);
+
+    if (categoryDistribution.length === 0) {
+      categoryDistribution.push({ name: "Other", value: 100, color: "#64748b" });
+    }
+
+    // Recent Activity calculation (expenses + settlements combined)
+    const recentActivity = [];
+    const groupMap = Object.fromEntries(groups.map((g) => [String(g._id), g.name]));
+
+    const categoryEmojiMap: Record<string, string> = {
+      food: "🍕",
+      transport: "🚗",
+      accommodation: "🏠",
+      entertainment: "🎬",
+      utilities: "💡",
+      shopping: "🛍️",
+      health: "❤️",
+      other: "📁",
+    };
+
+    for (const e of expenses) {
+      recentActivity.push({
+        id: String(e._id),
+        icon: categoryEmojiMap[e.category] || "📁",
+        description: `${e.paidBy === userId ? "You" : e.paidByName} added ${e.title}`,
+        group: groupMap[String(e.groupId)] || "Group",
+        amount: e.amount,
+        time: String(e.createdAt),
+        type: "expense" as const,
+      });
+    }
+
+    for (const s of settlements) {
+      recentActivity.push({
+        id: String(s._id),
+        icon: "✅",
+        description: `${s.payer === userId ? "You" : s.payerName} paid ${s.receiver === userId ? "you" : s.receiverName}`,
+        group: groupMap[String(s.groupId)] || "Group",
+        amount: s.amount,
+        time: String(s.settledAt || s.createdAt),
+        type: "settlement" as const,
+      });
+    }
+
+    recentActivity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    const finalRecentActivity = recentActivity.slice(0, 5);
+
+    // Suggested / Smart Settlements (current user's debts/receivables optimized)
+    const suggestedSettlements: Array<{ from: string; to: string; amount: number; groupName: string }> = [];
+    let totalOptimizedPaymentsCount = 0;
+    let totalRawTransactionsCount = 0;
+
+    for (const g of groups) {
+      const groupExpenses = expenses.filter((e) => String(e.groupId) === String(g._id));
+      const groupMembers = g.members.map((m: any) => ({
+        userId: m.userId,
+        name: m.name,
+        avatar: m.avatar,
+      }));
+
+      const optResult = generateOptimizationResult(
+        groupExpenses.map((e) => ({
+          ...e,
+          _id: String(e._id),
+          groupId: String(e.groupId),
+          receiptId: e.receiptId ? String(e.receiptId) : undefined,
+          createdAt: String(e.createdAt),
+          updatedAt: String(e.updatedAt),
+          splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
+          category: e.category as import("@/types").ExpenseCategory,
+        })),
+        groupMembers
+      );
+
+      totalOptimizedPaymentsCount += optResult.optimizedCount;
+      totalRawTransactionsCount += optResult.originalCount;
+
+      for (const s of optResult.optimizedSettlements) {
+        if (s.payer === userId || s.receiver === userId) {
+          suggestedSettlements.push({
+            from: s.payer === userId ? "You" : s.payerName,
+            to: s.receiver === userId ? "You" : s.receiverName,
+            amount: s.amount,
+            groupName: g.name,
+          });
+        }
+      }
+    }
+
     return NextResponse.json({
       data: {
         totalSpending,
@@ -82,6 +212,11 @@ export async function GET() {
         totalReceivable: Math.max(0, totalReceivable),
         netBalance: totalReceivable - totalOwed,
         spendingTrend,
+        categoryDistribution,
+        recentActivity: finalRecentActivity,
+        suggestedSettlements: suggestedSettlements.slice(0, 3),
+        totalOptimizedPaymentsCount,
+        totalRawTransactionsCount,
       },
     });
   } catch (error) {

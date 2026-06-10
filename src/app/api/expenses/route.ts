@@ -17,27 +17,43 @@ export async function GET(req: Request) {
     const page = parseInt(url.searchParams.get("page") ?? "1");
     const limit = parseInt(url.searchParams.get("limit") ?? "20");
 
-    if (!groupId) {
-      return NextResponse.json({ error: "groupId is required" }, { status: 400 });
-    }
+    const query: any = {};
 
-    // Verify user is a member of the group
-    const group = await Group.findOne({ _id: groupId, "members.userId": userId });
-    if (!group) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    if (groupId) {
+      // Verify user is a member of the group
+      const group = await Group.findOne({ _id: groupId, "members.userId": userId });
+      if (!group) {
+        return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      }
+      query.groupId = groupId;
+    } else {
+      // Fetch all groups user is in
+      const userGroups = await Group.find({ "members.userId": userId, isArchived: false }).lean();
+      const userGroupIds = userGroups.map((g) => g._id);
+      query.groupId = { $in: userGroupIds };
     }
 
     const [expenses, total] = await Promise.all([
-      Expense.find({ groupId })
+      Expense.find(query)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
-      Expense.countDocuments({ groupId }),
+      Expense.countDocuments(query),
     ]);
 
+    // Populate groupName for frontend display convenience
+    const uniqueGroupIds = [...new Set(expenses.map((e) => String(e.groupId)))];
+    const groupsList = await Group.find({ _id: { $in: uniqueGroupIds } }).lean();
+    const groupNameMap = Object.fromEntries(groupsList.map((g) => [String(g._id), g.name]));
+
+    const expensesWithGroupName = expenses.map((e) => ({
+      ...e,
+      groupName: groupNameMap[String(e.groupId)] || "Group",
+    }));
+
     return NextResponse.json({
-      data: expenses,
+      data: expensesWithGroupName,
       total,
       page,
       limit,

@@ -28,6 +28,7 @@ export interface Group {
   createdBy: string;
   currency: string;
   avatar?: string;
+  emoji?: string;
   isArchived: boolean;
   totalExpenses: number;
   memberCount: number;

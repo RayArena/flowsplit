@@ -6,6 +6,7 @@ import Settlement from "@/models/Settlement";
 import Group from "@/models/Group";
 import {
   generateOptimizationResult,
+  calculateBalances,
 } from "@/features/settlements/balanceEngine";
 
 export async function GET(req: Request) {
@@ -33,24 +34,43 @@ export async function GET(req: Request) {
       avatar: m.avatar,
     }));
 
-    const result = generateOptimizationResult(
-      expenses.map((e) => ({
-        ...e,
-        _id: String(e._id),
-        groupId: String(e.groupId),
-        receiptId: e.receiptId ? String(e.receiptId) : undefined,
-        createdAt: String(e.createdAt),
-        updatedAt: String(e.updatedAt),
-        splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
-        category: e.category as import("@/types").ExpenseCategory,
-      })),
-      members
-    );
+    const parsedExpenses = expenses.map((e) => ({
+      ...e,
+      _id: String(e._id),
+      groupId: String(e.groupId),
+      receiptId: e.receiptId ? String(e.receiptId) : undefined,
+      createdAt: String(e.createdAt),
+      updatedAt: String(e.updatedAt),
+      splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
+      category: e.category as import("@/types").ExpenseCategory,
+    }));
+
+    const result = generateOptimizationResult(parsedExpenses, members);
+    const currentBalances = calculateBalances(parsedExpenses, members);
+
+    const balancesObj: Record<string, { net: number; paid: number; owed: number }> = {};
+    for (const b of currentBalances) {
+      balancesObj[b.userId] = {
+        net: b.netBalance,
+        paid: b.totalPaid,
+        owed: b.totalOwed,
+      };
+    }
 
     // Also return recorded settlements
     const recorded = await Settlement.find({ groupId, status: "completed" }).lean();
 
-    return NextResponse.json({ data: { ...result, recordedSettlements: recorded } });
+    return NextResponse.json({
+      data: {
+        settlements: result.optimizedSettlements,
+        balances: balancesObj,
+        originalCount: result.originalCount,
+        optimizedCount: result.optimizedCount,
+        reduction: result.originalCount - result.optimizedCount,
+        reductionPercentage: result.reductionPercentage,
+        recordedSettlements: recorded,
+      },
+    });
   } catch (error) {
     console.error("GET /api/settlements", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

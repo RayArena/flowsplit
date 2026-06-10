@@ -2,22 +2,14 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { formatCurrency, formatRelativeTime, getCategoryIcon, getCategoryColor, EXPENSE_CATEGORIES } from "@/lib/utils";
-
-const MOCK_EXPENSES = [
-  { _id: "e1", title: "Hotel Booking at Taj", amount: 12000, paidByName: "Alice", paidBy: "u1", category: "accommodation", groupName: "Goa Trip", splitType: "equal", participants: 4, createdAt: "2026-06-10T10:00:00Z" },
-  { _id: "e2", title: "Dinner at Thalassa", amount: 4800, paidByName: "Bob", paidBy: "u2", category: "food", groupName: "Goa Trip", splitType: "equal", participants: 4, createdAt: "2026-06-11T20:00:00Z" },
-  { _id: "e3", title: "Scuba Diving Session", amount: 6000, paidByName: "Alice", paidBy: "u1", category: "entertainment", groupName: "Goa Trip", splitType: "percentage", participants: 3, createdAt: "2026-06-12T09:00:00Z" },
-  { _id: "e4", title: "Airport Cab to T1", amount: 1200, paidByName: "Charlie", paidBy: "u3", category: "transport", groupName: "Goa Trip", splitType: "equal", participants: 4, createdAt: "2026-06-09T06:30:00Z" },
-  { _id: "e5", title: "Team Lunch at Social", amount: 2800, paidByName: "You", paidBy: "u0", category: "food", groupName: "Office Lunches", splitType: "equal", participants: 3, createdAt: "2026-06-18T12:00:00Z" },
-  { _id: "e6", title: "Electricity Bill June", amount: 2400, paidByName: "Grace", paidBy: "u7", category: "utilities", groupName: "Flat 4B", splitType: "exact", participants: 3, createdAt: "2026-06-15T09:00:00Z" },
-  { _id: "e7", title: "Grocery Run", amount: 1600, paidByName: "You", paidBy: "u0", category: "shopping", groupName: "Flat 4B", splitType: "shares", participants: 3, createdAt: "2026-06-14T17:30:00Z" },
-];
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 
 const SPLIT_TYPE_LABELS: Record<string, string> = {
   equal: "Equal",
@@ -30,16 +22,36 @@ export default function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const filtered = MOCK_EXPENSES.filter((e) => {
+  // Fetch all user expenses
+  const { data = [], isLoading } = useQuery<any[]>({
+    queryKey: ["expenses"],
+    queryFn: async () => {
+      const res = await fetch("/api/expenses");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch expenses");
+      return json.data || [];
+    },
+  });
+
+  const filtered = data.filter((e) => {
     const matchSearch =
       !search ||
       e.title.toLowerCase().includes(search.toLowerCase()) ||
-      e.groupName.toLowerCase().includes(search.toLowerCase());
+      (e.groupName && e.groupName.toLowerCase().includes(search.toLowerCase()));
     const matchCategory = !selectedCategory || e.category === selectedCategory;
     return matchSearch && matchCategory;
   });
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-[#6366f1] animate-spin" />
+        <p className="text-[#64748b] text-sm">Loading expenses list...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -55,10 +67,12 @@ export default function ExpensesPage() {
             {filtered.length} expenses · {formatCurrency(total)} total
           </p>
         </div>
-        <Button variant="gradient" size="md" id="add-expense-btn">
-          <Plus className="w-4 h-4" />
-          Add Expense
-        </Button>
+        <Link href="/groups">
+          <Button variant="gradient" size="md" id="add-expense-btn">
+            <Plus className="w-4 h-4" />
+            Add Expense
+          </Button>
+        </Link>
       </motion.div>
 
       {/* Filters */}
@@ -139,21 +153,21 @@ export default function ExpensesPage() {
                   {expense.title}
                 </span>
                 <Badge variant="default" className="text-[10px] py-0 hidden sm:inline-flex">
-                  {SPLIT_TYPE_LABELS[expense.splitType]}
+                  {SPLIT_TYPE_LABELS[expense.splitType] || "Equal"}
                 </Badge>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <Avatar name={expense.paidByName} size="xs" />
                   <span className="text-xs text-[#475569]">
-                    {expense.paidBy === "u0" ? "You" : expense.paidByName} paid
+                    Paid by {expense.paidByName}
                   </span>
                 </div>
                 <span className="text-[#334155] text-xs">·</span>
-                <span className="text-xs text-[#475569]">{expense.groupName}</span>
+                <span className="text-xs text-[#475569]">{expense.groupName || "Group"}</span>
                 <span className="text-[#334155] text-xs">·</span>
                 <span className="text-xs text-[#475569]">
-                  {expense.participants} people
+                  {expense.participants?.length || 1} people
                 </span>
                 <span className="text-[#334155] text-xs">·</span>
                 <span className="text-xs text-[#475569]">
@@ -165,21 +179,11 @@ export default function ExpensesPage() {
             {/* Amount */}
             <div className="text-right flex-shrink-0">
               <div className="text-sm font-bold text-[#f8fafc]">
-                {formatCurrency(expense.amount)}
+                {formatCurrency(expense.amount, expense.currency)}
               </div>
               <div className="text-xs text-[#475569]">
-                {formatCurrency(expense.amount / expense.participants)} each
+                {formatCurrency(expense.amount / Math.max(1, expense.participants?.length || 1), expense.currency)} each
               </div>
-            </div>
-
-            {/* Action buttons on hover */}
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-              <Button variant="ghost" size="icon-sm" className="text-[#475569] hover:text-[#f8fafc]">
-                ✏️
-              </Button>
-              <Button variant="ghost" size="icon-sm" className="text-[#475569] hover:text-[#f87171]">
-                🗑️
-              </Button>
             </div>
           </motion.div>
         ))}

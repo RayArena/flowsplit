@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   ReactFlow,
   Node,
@@ -144,6 +144,11 @@ const DEMO_EDGES: Edge[] = [
 ];
 
 export function AnimatedGraph() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [nodes, , onNodesChange] = useNodesState(DEMO_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(DEMO_EDGES);
 
@@ -185,25 +190,31 @@ export function AnimatedGraph() {
           {/* Glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#6366f1]/5 to-[#8b5cf6]/5 pointer-events-none" />
 
-          <ReactFlowComponent
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            fitView
-            style={{ background: "#0a0f1e" }}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background color="#1e293b" gap={24} size={1} />
-            <Controls
-              style={{
-                background: "#1e293b",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 12,
-              }}
-            />
-          </ReactFlowComponent>
+          {mounted ? (
+            <ReactFlowComponent
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              fitView
+              style={{ background: "#0a0f1e" }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="#1e293b" gap={24} size={1} />
+              <Controls
+                style={{
+                  background: "#1e293b",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 12,
+                }}
+              />
+            </ReactFlowComponent>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-[#475569] bg-[#0a0f1e]">
+              Loading interactive graph...
+            </div>
+          )}
 
           {/* Legend */}
           <div className="absolute bottom-4 right-4 glass rounded-xl px-4 py-3 text-xs space-y-1.5">
