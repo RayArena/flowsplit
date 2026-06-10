@@ -7,16 +7,55 @@ import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { isClerkConfigured } from "@/lib/clerk-config";
 
-// Dynamically use Clerk components only when configured
-let SignedIn: React.ComponentType<{ children: React.ReactNode }> | null = null;
-let SignedOut: React.ComponentType<{ children: React.ReactNode }> | null = null;
-let UserButton: React.ComponentType<{ afterSignOutUrl?: string; appearance?: object }> | null = null;
+import { useAuth, UserButton as ClerkUserButton } from "@clerk/nextjs";
 
-if (isClerkConfigured()) {
-  const clerk = require("@clerk/nextjs");
-  SignedIn = clerk.SignedIn;
-  SignedOut = clerk.SignedOut;
-  UserButton = clerk.UserButton;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function UserButton(props: any) {
+  if (!isClerkConfigured()) return null;
+  return <ClerkUserButton {...props} />;
+}
+
+function LandingNavCTA() {
+  const { isSignedIn } = useAuth();
+
+  if (isSignedIn) {
+    return (
+      <>
+        <Link href="/dashboard">
+          <Button variant="secondary" size="sm">
+            Dashboard
+          </Button>
+        </Link>
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "w-8 h-8 rounded-xl",
+            },
+          }}
+        />
+      </>
+    );
+  }
+
+  return <DefaultCTA />;
+}
+
+function DefaultCTA() {
+  return (
+    <>
+      <Link href="/sign-in">
+        <Button variant="ghost" size="sm">
+          Sign in
+        </Button>
+      </Link>
+      <Link href="/sign-up">
+        <Button variant="gradient" size="sm">
+          Get Started
+        </Button>
+      </Link>
+    </>
+  );
 }
 
 const navLinks = [
@@ -67,51 +106,7 @@ export function LandingNav() {
 
           {/* CTA */}
           <div className="flex items-center gap-3">
-            {clerkReady && SignedIn && SignedOut && UserButton ? (
-              <>
-                <SignedIn>
-                  <Link href="/dashboard">
-                    <Button variant="secondary" size="sm">
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <UserButton
-                    afterSignOutUrl="/"
-                    appearance={{
-                      elements: {
-                        avatarBox: "w-8 h-8 rounded-xl",
-                      },
-                    }}
-                  />
-                </SignedIn>
-                <SignedOut>
-                  <Link href="/sign-in">
-                    <Button variant="ghost" size="sm">
-                      Sign in
-                    </Button>
-                  </Link>
-                  <Link href="/sign-up">
-                    <Button variant="gradient" size="sm">
-                      Get Started
-                    </Button>
-                  </Link>
-                </SignedOut>
-              </>
-            ) : (
-              // Fallback when Clerk isn't configured — static demo links
-              <>
-                <Link href="/sign-in">
-                  <Button variant="ghost" size="sm">
-                    Sign in
-                  </Button>
-                </Link>
-                <Link href="/sign-up">
-                  <Button variant="gradient" size="sm">
-                    Get Started
-                  </Button>
-                </Link>
-              </>
-            )}
+            {clerkReady ? <LandingNavCTA /> : <DefaultCTA />}
           </div>
         </nav>
       </div>

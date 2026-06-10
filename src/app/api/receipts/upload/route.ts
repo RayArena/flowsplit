@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     let imageUrl = "";
     let publicId: string | undefined;
-    let finalRawText = rawText ?? "";
+    const finalRawText = rawText ?? "";
 
     // Upload to Cloudinary if image is provided
     if (imageBase64) {

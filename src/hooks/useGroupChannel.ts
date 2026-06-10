@@ -12,6 +12,7 @@ interface UseGroupChannelOptions {
 
 export function useGroupChannel({ groupId, enabled = true }: UseGroupChannelOptions) {
   const queryClient = useQueryClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const channelRef = useRef<any>(null);
 
   useEffect(() => {

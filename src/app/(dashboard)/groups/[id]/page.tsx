@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { useParams } from "next/navigation";
 import {
   ReactFlow,
   Background,
@@ -12,6 +11,7 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ReactFlowComponent = ReactFlow as any;
 import "@xyflow/react/dist/style.css";
 import {
@@ -113,7 +113,6 @@ const TABS = [
 ];
 
 export default function GroupDetailPage() {
-  const params = useParams();
   const [activeTab, setActiveTab] = useState("overview");
   const [nodes, , onNodesChange] = useNodesState(FLOW_NODES);
   const [edges, , onEdgesChange] = useEdgesState(FLOW_EDGES);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+
 // Check if Clerk is configured with real keys
 const CLERK_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 const isClerkConfigured =
@@ -9,11 +11,10 @@ const isClerkConfigured =
   !CLERK_PUBLISHABLE_KEY.includes("REPLACE");
 
 // Only apply Clerk middleware when keys are present
-let clerkMiddlewareExport: typeof import("next/server").NextResponse | unknown;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let clerkMiddlewareExport: any;
 
 if (isClerkConfigured) {
-  const { clerkMiddleware, createRouteMatcher } = require("@clerk/nextjs/server");
-
   const isPublicRoute = createRouteMatcher([
     "/",
     "/sign-in(.*)",
@@ -22,7 +23,8 @@ if (isClerkConfigured) {
     "/api/pusher/auth",
   ]);
 
-  clerkMiddlewareExport = clerkMiddleware(async (auth: { protect: () => Promise<void> }, request: NextRequest) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clerkMiddlewareExport = clerkMiddleware(async (auth: any, request: any) => {
     if (!isPublicRoute(request)) {
       await auth.protect();
     }

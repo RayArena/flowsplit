@@ -5,8 +5,6 @@ import Expense from "@/models/Expense";
 import Settlement from "@/models/Settlement";
 import Group from "@/models/Group";
 import {
-  calculateBalances,
-  optimizeSettlements,
   generateOptimizationResult,
 } from "@/features/settlements/balanceEngine";
 

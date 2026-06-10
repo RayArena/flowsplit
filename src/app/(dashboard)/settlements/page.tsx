@@ -17,6 +17,7 @@ import {
   Calculator,
 } from "lucide-react";
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from "@xyflow/react";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ReactFlowComponent = ReactFlow as any;
 import "@xyflow/react/dist/style.css";
 

@@ -2,8 +2,6 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Group from "@/models/Group";
-import Expense from "@/models/Expense";
-import { pusherServer, getPusherChannel, PUSHER_EVENTS } from "@/lib/pusher";
 
 interface Params {
   params: Promise<{ id: string }>;

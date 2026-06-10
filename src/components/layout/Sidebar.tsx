@@ -16,12 +16,12 @@ import {
   Search,
   User,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { UserButton as ClerkUserButton } from "@clerk/nextjs";
 
-// Dynamically load Clerk UserButton
-let UserButton: React.ComponentType<{ afterSignOutUrl?: string; appearance?: object }> | null = null;
-if (isClerkConfigured()) {
-  UserButton = require("@clerk/nextjs").UserButton;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function UserButton(props: any) {
+  if (!isClerkConfigured()) return null;
+  return <ClerkUserButton {...props} />;
 }
 
 const navItems = [

@@ -20,7 +20,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { formatCurrency, formatRelativeTime, getCategoryIcon } from "@/lib/utils";
+import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -33,7 +33,6 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import type { Metadata } from "next";
 
 // ---- Mock data for UI demo (replace with real API calls) ----
 const SPENDING_TREND = [
