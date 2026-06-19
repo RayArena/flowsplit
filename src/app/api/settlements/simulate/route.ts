@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Expense from "@/models/Expense";
 import Group from "@/models/Group";
+import Settlement from "@/models/Settlement";
 import {
   calculateBalances,
   simulateSettlement,
@@ -27,6 +28,10 @@ export async function POST(req: Request) {
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });
 
     const expenses = await Expense.find({ groupId }).lean();
+    const completedSettlements = await Settlement.find({
+      groupId,
+      status: "completed",
+    }).lean();
 
     const members = group.members.map((m: { userId: string; name: string; avatar?: string }) => ({
       userId: m.userId,
@@ -34,19 +39,25 @@ export async function POST(req: Request) {
       avatar: m.avatar,
     }));
 
-    const currentBalances = calculateBalances(
-      expenses.map((e) => ({
-        ...e,
-        _id: String(e._id),
-        groupId: String(e.groupId),
-        receiptId: e.receiptId ? String(e.receiptId) : undefined,
-        createdAt: String(e.createdAt),
-        updatedAt: String(e.updatedAt),
-        splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
-        category: e.category as import("@/types").ExpenseCategory,
-      })),
-      members
-    );
+    const parsedExpenses = expenses.map((e) => ({
+      ...e,
+      _id: String(e._id),
+      groupId: String(e.groupId),
+      receiptId: e.receiptId ? String(e.receiptId) : undefined,
+      createdAt: String(e.createdAt),
+      updatedAt: String(e.updatedAt),
+      splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
+      category: e.category as import("@/types").ExpenseCategory,
+    }));
+
+    const parsedSettlements = completedSettlements.map((s) => ({
+      payer: s.payer,
+      receiver: s.receiver,
+      amount: s.amount,
+      status: s.status,
+    }));
+
+    const currentBalances = calculateBalances(parsedExpenses, members, parsedSettlements);
 
     const { projectedBalances, projectedSettlements } = simulateSettlement(
       currentBalances,

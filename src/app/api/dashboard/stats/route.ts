@@ -169,10 +169,18 @@ export async function GET() {
 
     for (const g of groups) {
       const groupExpenses = expenses.filter((e) => String(e.groupId) === String(g._id));
+      const groupSettlements = settlements.filter((s) => String(s.groupId) === String(g._id));
       const groupMembers = g.members.map((m: any) => ({
         userId: m.userId,
         name: m.name,
         avatar: m.avatar,
+      }));
+
+      const parsedGroupSettlements = groupSettlements.map((s) => ({
+        payer: s.payer,
+        receiver: s.receiver,
+        amount: s.amount,
+        status: s.status,
       }));
 
       const optResult = generateOptimizationResult(
@@ -186,7 +194,8 @@ export async function GET() {
           splitType: e.splitType as "equal" | "percentage" | "exact" | "shares",
           category: e.category as import("@/types").ExpenseCategory,
         })),
-        groupMembers
+        groupMembers,
+        parsedGroupSettlements
       );
 
       totalOptimizedPaymentsCount += optResult.optimizedCount;

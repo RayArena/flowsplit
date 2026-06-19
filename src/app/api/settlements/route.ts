@@ -28,6 +28,12 @@ export async function GET(req: Request) {
 
     const expenses = await Expense.find({ groupId }).lean();
 
+    // Fetch completed settlements to factor into balance calculations
+    const completedSettlements = await Settlement.find({
+      groupId,
+      status: "completed",
+    }).lean();
+
     const members = group.members.map((m: { userId: string; name: string; avatar?: string }) => ({
       userId: m.userId,
       name: m.name,
@@ -45,8 +51,16 @@ export async function GET(req: Request) {
       category: e.category as import("@/types").ExpenseCategory,
     }));
 
-    const result = generateOptimizationResult(parsedExpenses, members);
-    const currentBalances = calculateBalances(parsedExpenses, members);
+    const parsedSettlements = completedSettlements.map((s) => ({
+      payer: s.payer,
+      receiver: s.receiver,
+      amount: s.amount,
+      status: s.status,
+    }));
+
+    // Pass completed settlements so balance engine subtracts them
+    const result = generateOptimizationResult(parsedExpenses, members, parsedSettlements);
+    const currentBalances = calculateBalances(parsedExpenses, members, parsedSettlements);
 
     const balancesObj: Record<string, { net: number; paid: number; owed: number }> = {};
     for (const b of currentBalances) {
@@ -57,9 +71,6 @@ export async function GET(req: Request) {
       };
     }
 
-    // Also return recorded settlements
-    const recorded = await Settlement.find({ groupId, status: "completed" }).lean();
-
     return NextResponse.json({
       data: {
         settlements: result.optimizedSettlements,
@@ -68,7 +79,7 @@ export async function GET(req: Request) {
         optimizedCount: result.optimizedCount,
         reduction: result.originalCount - result.optimizedCount,
         reductionPercentage: result.reductionPercentage,
-        recordedSettlements: recorded,
+        recordedSettlements: completedSettlements,
       },
     });
   } catch (error) {

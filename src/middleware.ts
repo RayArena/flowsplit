@@ -19,7 +19,9 @@ if (isClerkConfigured) {
     "/",
     "/sign-in(.*)",
     "/sign-up(.*)",
+    "/invite(.*)",
     "/api/webhooks(.*)",
+    "/api/invite(.*)",
     "/api/pusher/auth",
   ]);
 
@@ -38,7 +40,9 @@ if (isClerkConfigured) {
       pathname === "/" ||
       pathname.startsWith("/sign-in") ||
       pathname.startsWith("/sign-up") ||
+      pathname.startsWith("/invite") ||
       pathname.startsWith("/api/webhooks") ||
+      pathname.startsWith("/api/invite") ||
       pathname.startsWith("/api/pusher/auth");
 
     if (!isPublic) {

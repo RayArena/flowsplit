@@ -1,15 +1,13 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useCallback, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -23,9 +21,12 @@ import {
   Receipt,
   LayoutDashboard,
   X,
-  Sparkles,
   Loader2,
   Upload,
+  Copy,
+  Link2,
+  RefreshCw,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ export default function GroupDetailPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -178,8 +180,8 @@ export default function GroupDetailPage() {
 
   const flowEdges = optimizedSettlements.map((s: any, idx: number) => ({
     id: `e-${idx}`,
-    source: s.from,
-    target: s.to,
+    source: s.payer,
+    target: s.receiver,
     label: formatCurrency(s.amount, group.currency),
     animated: true,
     style: { stroke: "#6366f1", strokeWidth: 2 },
@@ -214,7 +216,7 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" onClick={() => setIsInviteModalOpen(true)}>
               <UserPlus className="w-4 h-4" />
               Invite
             </Button>
@@ -316,10 +318,10 @@ export default function GroupDetailPage() {
                 </div>
                 {optimizedSettlements.slice(0, 3).map((s: any, i: number) => (
                   <div key={i} className="flex items-center gap-2 text-sm p-2 rounded-xl bg-white/3">
-                    <Avatar name={s.fromName} size="xs" />
+                    <Avatar name={s.payerName} size="xs" />
                     <span className="text-[#475569]">→</span>
-                    <Avatar name={s.toName} size="xs" />
-                    <span className="flex-1 text-[#64748b] text-xs truncate">{s.fromName} → {s.toName}</span>
+                    <Avatar name={s.receiverName} size="xs" />
+                    <span className="flex-1 text-[#64748b] text-xs truncate">{s.payerName} → {s.receiverName}</span>
                     <span className="text-[#818cf8] font-semibold text-xs">{formatCurrency(s.amount, group.currency)}</span>
                   </div>
                 ))}
@@ -457,24 +459,24 @@ export default function GroupDetailPage() {
               <CardContent className="space-y-3">
                 {optimizedSettlements.map((s: any, i: number) => (
                   <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-white/3 border border-white/8">
-                    <Avatar name={s.fromName} size="sm" />
+                    <Avatar name={s.payerName} size="sm" />
                     <div className="flex-1">
                       <div className="text-sm text-[#f8fafc] font-medium">
-                        {s.fromName} <span className="text-[#475569]">→</span> {s.toName}
+                        {s.payerName} <span className="text-[#475569]">→</span> {s.receiverName}
                       </div>
                       <div className="text-xs text-[#475569] mt-0.5">Settle balance debt</div>
                     </div>
-                    <Avatar name={s.toName} size="sm" />
+                    <Avatar name={s.receiverName} size="sm" />
                     <div className="text-sm font-bold text-[#818cf8] mr-2">{formatCurrency(s.amount, group.currency)}</div>
                     <Button
                       variant="success"
                       size="sm"
                       onClick={() =>
                         recordSettlementMutation.mutate({
-                          payer: s.from,
-                          payerName: s.fromName,
-                          receiver: s.to,
-                          receiverName: s.toName,
+                          payer: s.payer,
+                          payerName: s.payerName,
+                          receiver: s.receiver,
+                          receiverName: s.receiverName,
                           amount: s.amount,
                         })
                       }
@@ -547,6 +549,14 @@ export default function GroupDetailPage() {
         )}
       </motion.div>
 
+      {/* Invite Modal */}
+      <InviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        groupId={groupId}
+        groupName={group.name}
+      />
+
       {/* Add Expense Modal */}
       <AddExpenseModal
         isOpen={isExpenseModalOpen}
@@ -574,7 +584,6 @@ function AddExpenseModal({
   group: any;
   onSuccess: () => void;
 }) {
-  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("other");
@@ -819,6 +828,139 @@ function AddExpenseModal({
                 </Button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Sub-Component: InviteModal
+function InviteModal({
+  isOpen,
+  onClose,
+  groupId,
+  groupName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  groupId: string;
+  groupName: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const { data: inviteData, isLoading, refetch } = useQuery({
+    queryKey: ["invite", groupId],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/invite`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to get invite link");
+      return json.data;
+    },
+    enabled: isOpen,
+  });
+
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}/invite`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to regenerate invite link");
+      return json.data;
+    },
+    onSuccess: () => {
+      refetch();
+      toast.success("Invite link regenerated!");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to regenerate invite link.");
+    },
+  });
+
+  const handleCopy = async () => {
+    if (!inviteData?.inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteData.inviteUrl);
+      setCopied(true);
+      toast.success("Invite link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#030712]/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-md bg-[#0f172a] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#6366f1] to-[#8b5cf6]" />
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#64748b] hover:text-[#f8fafc] hover:bg-white/10 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] flex items-center justify-center">
+                <Link2 className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-[#f8fafc]">Invite to {groupName}</h2>
+            </div>
+
+            <p className="text-[#64748b] text-sm mb-5">
+              Share this link with anyone you want to invite. They&apos;ll be able to join the group after signing in.
+            </p>
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 text-[#6366f1] animate-spin" />
+              </div>
+            ) : inviteData?.inviteUrl ? (
+              <div className="space-y-4">
+                {/* Invite link display */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-[#1e293b] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-[#94a3b8] font-mono truncate">
+                    {inviteData.inviteUrl}
+                  </div>
+                  <button
+                    onClick={handleCopy}
+                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#6366f1] hover:bg-[#4f46e5] flex items-center justify-center transition-colors"
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4 text-white" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-white" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Regenerate */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#475569]">
+                    Code: <code className="text-[#818cf8]">{inviteData.inviteCode}</code>
+                  </span>
+                  <button
+                    onClick={() => regenerateMutation.mutate()}
+                    disabled={regenerateMutation.isPending}
+                    className="flex items-center gap-1.5 text-xs text-[#64748b] hover:text-[#94a3b8] transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+                    Regenerate link
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-[#64748b] text-sm">
+                Failed to generate invite link. Please try again.
+              </div>
+            )}
           </motion.div>
         </div>
       )}

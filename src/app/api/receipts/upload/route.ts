@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Receipt from "@/models/Receipt";
 import { uploadReceiptImage } from "@/lib/cloudinary";
-import { parseReceiptText } from "@/features/ocr/receiptParser";
+import { processReceipt, parseReceiptText } from "@/features/ocr/receiptParser";
 
 export async function POST(req: Request) {
   try {
@@ -21,7 +21,6 @@ export async function POST(req: Request) {
 
     let imageUrl = "";
     let publicId: string | undefined;
-    const finalRawText = rawText ?? "";
 
     // Upload to Cloudinary if image is provided
     if (imageBase64) {
@@ -30,21 +29,46 @@ export async function POST(req: Request) {
         imageUrl = uploaded.url;
         publicId = uploaded.publicId;
       } catch (err) {
-        console.warn("Cloudinary upload failed, using base64 fallback:", err);
-        imageUrl = imageBase64.slice(0, 500); // store truncated for dev
+        console.warn("Cloudinary upload failed, storing without image URL:", err);
+        // Don't fail the request — OCR can still work
       }
     }
 
-    // Parse the OCR text
-    const extractedData = parseReceiptText(finalRawText);
+    // Run OCR: if rawText is provided, parse it directly.
+    // Otherwise, run Tesseract.js on the uploaded image to extract text first.
+    let extractedData;
+
+    if (rawText) {
+      // Client already extracted text — just parse it
+      extractedData = { ...parseReceiptText(rawText), rawText };
+    } else if (imageBase64) {
+      // Run server-side Tesseract OCR on the base64 image
+      try {
+        extractedData = await processReceipt(imageBase64);
+      } catch (ocrErr) {
+        console.warn("OCR processing failed, saving with empty extraction:", ocrErr);
+        extractedData = {
+          rawText: "",
+          vendor: undefined,
+          date: undefined,
+          amount: undefined,
+          items: [],
+        };
+      }
+    } else {
+      extractedData = {
+        rawText: "",
+        vendor: undefined,
+        date: undefined,
+        amount: undefined,
+        items: [],
+      };
+    }
 
     const receipt = await Receipt.create({
       imageUrl,
       publicId,
-      extractedData: {
-        ...extractedData,
-        rawText: finalRawText,
-      },
+      extractedData,
     });
 
     return NextResponse.json({ data: receipt }, { status: 201 });

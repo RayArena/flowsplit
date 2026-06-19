@@ -21,46 +21,8 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { Calendar } from "lucide-react";
-
-const SPENDING_TREND = [
-  { month: "Jan", personal: 8400, group: 22000 },
-  { month: "Feb", personal: 6200, group: 14500 },
-  { month: "Mar", personal: 11800, group: 28000 },
-  { month: "Apr", personal: 9100, group: 18600 },
-  { month: "May", personal: 13400, group: 32000 },
-  { month: "Jun", personal: 7800, group: 21000 },
-  { month: "Jul", personal: 15200, group: 38000 },
-];
-
-const CATEGORY_DATA = [
-  { name: "Food & Drinks", value: 35, color: "#f97316", amount: 28400 },
-  { name: "Transport", value: 20, color: "#3b82f6", amount: 16200 },
-  { name: "Accommodation", value: 25, color: "#8b5cf6", amount: 20300 },
-  { name: "Entertainment", value: 12, color: "#ec4899", amount: 9700 },
-  { name: "Utilities", value: 5, color: "#eab308", amount: 4100 },
-  { name: "Other", value: 3, color: "#64748b", amount: 2400 },
-];
-
-const MEMBER_DATA = [
-  { name: "Alice", paid: 24000, owed: 16800 },
-  { name: "Bob", paid: 12400, owed: 15200 },
-  { name: "Charlie", paid: 8800, owed: 11400 },
-  { name: "Diana", paid: 18600, owed: 14000 },
-  { name: "Evan", paid: 5200, owed: 7600 },
-];
-
-const MONTHLY_COMPARISON = [
-  { month: "Jan", thisYear: 30400, lastYear: 24800 },
-  { month: "Feb", thisYear: 20700, lastYear: 18200 },
-  { month: "Mar", thisYear: 39800, lastYear: 31400 },
-  { month: "Apr", thisYear: 27700, lastYear: 22600 },
-  { month: "May", thisYear: 45400, lastYear: 36800 },
-  { month: "Jun", thisYear: 28800, lastYear: 24100 },
-  { month: "Jul", thisYear: 53200, lastYear: 42000 },
-];
-
-const DATE_RANGES = ["Last 7 days", "Last month", "Last 3 months", "Last year"];
+import { Calendar, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (active && payload && payload.length) {
@@ -81,7 +43,41 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export default function AnalyticsPage() {
-  const [dateRange, setDateRange] = useState("Last month");
+  const [dateRange, setDateRange] = useState("Last 3 months");
+
+  const DATE_RANGES = ["Last 7 days", "Last month", "Last 3 months", "Last year"];
+
+  const rangeParam = dateRange === "Last 7 days" ? "last_7_days"
+    : dateRange === "Last month" ? "last_month"
+    : dateRange === "Last year" ? "last_year"
+    : "last_3_months";
+
+  const { data: analytics, isLoading } = useQuery({
+    queryKey: ["analytics", rangeParam],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics?range=${rangeParam}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch analytics");
+      return json.data;
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-[#6366f1] animate-spin" />
+        <p className="text-[#64748b] text-sm">Loading analytics...</p>
+      </div>
+    );
+  }
+
+  const topMetrics = analytics?.topMetrics || {};
+  const spendingTrend = analytics?.spendingTrend || [];
+  const categoryDistribution = analytics?.categoryDistribution || [];
+  const memberContributions = analytics?.memberContributions || [];
+  const yearComparison = analytics?.yearComparison || [];
+
+  const thisYear = new Date().getFullYear();
 
   return (
     <div className="space-y-6">
@@ -119,10 +115,30 @@ export default function AnalyticsPage() {
       {/* Top metrics */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Total Spent", value: formatCurrency(102200), change: "+8%", up: true },
-          { label: "Avg Monthly", value: formatCurrency(14600), change: "+3%", up: true },
-          { label: "Biggest Expense", value: formatCurrency(28000), change: "Goa Hotel", up: null },
-          { label: "Groups Active", value: "6", change: "+2 this month", up: true },
+          {
+            label: "Total Spent",
+            value: formatCurrency(topMetrics.totalSpent || 0),
+            change: topMetrics.activeGroups > 0 ? `Across ${topMetrics.activeGroups} groups` : "No data",
+            up: null,
+          },
+          {
+            label: "Avg Monthly",
+            value: formatCurrency(topMetrics.avgMonthly || 0),
+            change: "average per month",
+            up: null,
+          },
+          {
+            label: "Biggest Expense",
+            value: formatCurrency(topMetrics.biggestExpense || 0),
+            change: topMetrics.biggestExpenseTitle || "N/A",
+            up: null,
+          },
+          {
+            label: "Groups Active",
+            value: String(topMetrics.activeGroups || 0),
+            change: topMetrics.newGroupsThisMonth ? `${topMetrics.newGroupsThisMonth} active this month` : "0 active",
+            up: true,
+          },
         ].map((m, i) => (
           <motion.div
             key={m.label}
@@ -163,16 +179,20 @@ export default function AnalyticsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={SPENDING_TREND}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="personal" name="Personal" stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1", r: 4 }} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="group" name="Group" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: "#8b5cf6", r: 4 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {spendingTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={spendingTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="personal" name="Personal" stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1", r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="group" name="Group" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: "#8b5cf6", r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-[#475569] text-xs">No spending data available yet.</div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -190,38 +210,42 @@ export default function AnalyticsPage() {
               <CardTitle>Category Spending</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-6">
-                <ResponsiveContainer width="50%" height={200}>
-                  <PieChart>
-                    <Pie data={CATEGORY_DATA} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                      {CATEGORY_DATA.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={({ active, payload }) => {
-                      if (active && payload?.length) {
-                        return (
-                          <div className="glass rounded-xl px-3 py-2 text-xs">
-                            <div className="text-[#f8fafc]">{payload[0].name}</div>
-                            <div className="font-semibold" style={{ color: (payload[0].payload as { color: string }).color }}>{payload[0].value}%</div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-2.5 justify-center flex flex-col">
-                  {CATEGORY_DATA.map((c) => (
-                    <div key={c.name} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                      <span className="text-xs text-[#64748b] flex-1 truncate">{c.name}</span>
-                      <span className="text-xs font-medium text-[#94a3b8]">{formatCurrency(c.amount)}</span>
-                      <span className="text-xs text-[#475569] w-6 text-right">{c.value}%</span>
-                    </div>
-                  ))}
+              {categoryDistribution.length > 0 ? (
+                <div className="flex gap-6">
+                  <ResponsiveContainer width="50%" height={200}>
+                    <PieChart>
+                      <Pie data={categoryDistribution} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                        {categoryDistribution.map((entry: any, i: number) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (active && payload?.length) {
+                          return (
+                            <div className="glass rounded-xl px-3 py-2 text-xs">
+                              <div className="text-[#f8fafc]">{payload[0].name}</div>
+                              <div className="font-semibold" style={{ color: (payload[0].payload as { color: string }).color }}>{payload[0].value}%</div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex-1 space-y-2.5 justify-center flex flex-col">
+                    {categoryDistribution.map((c: any) => (
+                      <div key={c.name} className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                        <span className="text-xs text-[#64748b] flex-1 truncate">{c.name}</span>
+                        <span className="text-xs font-medium text-[#94a3b8]">{formatCurrency(c.amount)}</span>
+                        <span className="text-xs text-[#475569] w-6 text-right">{c.value}%</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-12 text-[#475569] text-xs">No category data available yet.</div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -237,16 +261,20 @@ export default function AnalyticsPage() {
               <CardTitle>Member Contributions</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={MEMBER_DATA} layout="vertical" barSize={10}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} width={55} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="paid" name="Paid" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="owed" name="Owes" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {memberContributions.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={memberContributions} layout="vertical" barSize={10}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} width={55} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="paid" name="Paid" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="owed" name="Owes" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center py-12 text-[#475569] text-xs">No member data available yet.</div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -264,31 +292,37 @@ export default function AnalyticsPage() {
               <CardTitle>Year-over-Year Comparison</CardTitle>
               <Badge variant="brand">
                 <Calendar className="w-3 h-3" />
-                2025 vs 2026
+                {thisYear - 1} vs {thisYear}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={MONTHLY_COMPARISON}>
-                <defs>
-                  <linearGradient id="thisYear" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="lastYear" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="thisYear" name="2026" stroke="#6366f1" fill="url(#thisYear)" strokeWidth={2} />
-                <Area type="monotone" dataKey="lastYear" name="2025" stroke="#94a3b8" fill="url(#lastYear)" strokeWidth={1.5} strokeDasharray="4 4" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {yearComparison.some((y: any) => y.thisYear > 0 || y.lastYear > 0) ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={yearComparison}>
+                  <defs>
+                    <linearGradient id="thisYear" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="lastYear" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="thisYear" name={String(thisYear)} stroke="#6366f1" fill="url(#thisYear)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="lastYear" name={String(thisYear - 1)} stroke="#94a3b8" fill="url(#lastYear)" strokeWidth={1.5} strokeDasharray="4 4" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-[#475569] text-xs">
+                Not enough data yet for year-over-year comparison. Start logging expenses!
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

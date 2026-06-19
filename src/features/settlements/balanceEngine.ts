@@ -1,13 +1,26 @@
 import { Expense, UserBalance, DebtEdge, OptimizedSettlement, OptimizationResult } from "@/types";
 
 // ============================================================
-// Balance Engine
-// Calculates net balances for each user in a group
+// Balance Engine — Min-Cash-Flow Algorithm
+// Calculates net balances and minimizes transaction count
 // ============================================================
 
+interface SettlementRecord {
+  payer: string;
+  receiver: string;
+  amount: number;
+  status: string;
+}
+
+/**
+ * Calculate net balances for each user in a group.
+ * Optionally factors in completed settlements so that
+ * "Mark Paid" actually reduces balances.
+ */
 export function calculateBalances(
   expenses: Expense[],
-  members: Array<{ userId: string; name: string; avatar?: string }>
+  members: Array<{ userId: string; name: string; avatar?: string }>,
+  completedSettlements: SettlementRecord[] = []
 ): UserBalance[] {
   const balanceMap: Record<string, { paid: number; owed: number }> = {};
 
@@ -31,6 +44,21 @@ export function calculateBalances(
     }
   }
 
+  // Factor in completed settlements:
+  // When payer sends money to receiver, it's like:
+  //   - payer has paid more (increase their "paid")
+  //   - receiver has owed more (increase their "owed")
+  // This effectively adjusts net balances: payer.net += amount, receiver.net -= amount
+  for (const settlement of completedSettlements) {
+    if (settlement.status !== "completed") continue;
+    if (balanceMap[settlement.payer]) {
+      balanceMap[settlement.payer].paid += settlement.amount;
+    }
+    if (balanceMap[settlement.receiver]) {
+      balanceMap[settlement.receiver].owed += settlement.amount;
+    }
+  }
+
   return members.map((member) => {
     const b = balanceMap[member.userId] ?? { paid: 0, owed: 0 };
     return {
@@ -39,7 +67,7 @@ export function calculateBalances(
       avatar: member.avatar,
       totalPaid: b.paid,
       totalOwed: b.owed,
-      netBalance: b.paid - b.owed, // positive = owed money, negative = owes money
+      netBalance: Math.round((b.paid - b.owed) * 100) / 100,
     };
   });
 }
@@ -87,55 +115,71 @@ export function buildDebtGraph(
 }
 
 // ============================================================
-// Settlement Optimizer
-// Greedy algorithm to minimize the number of transactions
-// Time complexity: O(n log n) per iteration
+// Min-Cash-Flow Settlement Optimizer
 //
-// Algorithm:
+// Algorithm (Minimum Cash Flow):
 // 1. Compute net balance for each person
 // 2. Separate into creditors (net > 0) and debtors (net < 0)
-// 3. Greedy: match largest debtor with largest creditor
-// 4. Result: at most (n-1) transactions for n people
+// 3. Sort creditors descending, debtors ascending (by absolute value)
+// 4. Match the largest creditor with the largest debtor
+// 5. Settle min(creditor_amount, |debtor_amount|)
+// 6. This cancels one side completely each iteration
+// 7. Repeat until all balances are zero
+//
+// Result: At most (n-1) transactions for n people
+// This minimizes both the number of transactions AND
+// the total cash flow through the system.
 // ============================================================
 
 export function optimizeSettlements(balances: UserBalance[]): OptimizedSettlement[] {
   const EPSILON = 0.01; // ignore rounding dust
 
+  // Build mutable net-balance list
   const net = balances.map((b) => ({
     userId: b.userId,
     name: b.name,
-    amount: b.netBalance,
+    amount: Math.round(b.netBalance * 100) / 100,
   }));
-
-  const creditors = net.filter((n) => n.amount > EPSILON).sort((a, b) => b.amount - a.amount);
-  const debtors = net.filter((n) => n.amount < -EPSILON).sort((a, b) => a.amount - b.amount);
 
   const settlements: OptimizedSettlement[] = [];
 
-  let ci = 0;
-  let di = 0;
+  // Min-Cash-Flow: iteratively match max creditor with max debtor
+  // Using array re-sort approach (equivalent to heap for small N)
+  while (true) {
+    // Find max creditor and max debtor
+    let maxCreditor = { userId: "", name: "", amount: 0 };
+    let maxDebtor = { userId: "", name: "", amount: 0 };
 
-  while (ci < creditors.length && di < debtors.length) {
-    const creditor = creditors[ci];
-    const debtor = debtors[di];
+    for (const n of net) {
+      if (n.amount > maxCreditor.amount + EPSILON) {
+        maxCreditor = n;
+      }
+      if (n.amount < maxDebtor.amount - EPSILON) {
+        maxDebtor = n;
+      }
+    }
 
-    const settleAmount = Math.min(creditor.amount, Math.abs(debtor.amount));
+    // If no significant creditor or debtor remains, we're done
+    if (maxCreditor.amount < EPSILON || Math.abs(maxDebtor.amount) < EPSILON) {
+      break;
+    }
+
+    // Settle the minimum of the two
+    const settleAmount = Math.min(maxCreditor.amount, Math.abs(maxDebtor.amount));
 
     if (settleAmount > EPSILON) {
       settlements.push({
-        payer: debtor.userId,
-        payerName: debtor.name,
-        receiver: creditor.userId,
-        receiverName: creditor.name,
+        payer: maxDebtor.userId,
+        payerName: maxDebtor.name,
+        receiver: maxCreditor.userId,
+        receiverName: maxCreditor.name,
         amount: Math.round(settleAmount * 100) / 100,
       });
     }
 
-    creditor.amount -= settleAmount;
-    debtor.amount += settleAmount;
-
-    if (creditor.amount < EPSILON) ci++;
-    if (Math.abs(debtor.amount) < EPSILON) di++;
+    // Update balances — one of them becomes zero
+    maxCreditor.amount = Math.round((maxCreditor.amount - settleAmount) * 100) / 100;
+    maxDebtor.amount = Math.round((maxDebtor.amount + settleAmount) * 100) / 100;
   }
 
   return settlements;
@@ -147,9 +191,10 @@ export function optimizeSettlements(balances: UserBalance[]): OptimizedSettlemen
 
 export function generateOptimizationResult(
   expenses: Expense[],
-  members: Array<{ userId: string; name: string; avatar?: string }>
+  members: Array<{ userId: string; name: string; avatar?: string }>,
+  completedSettlements: SettlementRecord[] = []
 ): OptimizationResult {
-  const balances = calculateBalances(expenses, members);
+  const balances = calculateBalances(expenses, members, completedSettlements);
   const rawEdges = buildDebtGraph(expenses, members);
   const optimized = optimizeSettlements(balances);
 
@@ -183,10 +228,10 @@ export function simulateSettlement(
 } {
   const projectedBalances = currentBalances.map((b) => {
     if (b.userId === payerId) {
-      return { ...b, netBalance: b.netBalance + amount };
+      return { ...b, netBalance: Math.round((b.netBalance + amount) * 100) / 100 };
     }
     if (b.userId === receiverId) {
-      return { ...b, netBalance: b.netBalance - amount };
+      return { ...b, netBalance: Math.round((b.netBalance - amount) * 100) / 100 };
     }
     return b;
   });
