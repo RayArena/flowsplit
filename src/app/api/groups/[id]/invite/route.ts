@@ -26,7 +26,7 @@ export async function GET(_req: Request, { params }: Params) {
       await group.save(); // pre-save hook generates the code
     }
 
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite/${group.inviteCode}`;
+    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://flowsplit-sand.vercel.app"}/invite/${group.inviteCode}`;
 
     return NextResponse.json({
       data: {
@@ -66,7 +66,7 @@ export async function POST(_req: Request, { params }: Params) {
     group.inviteCode = crypto.randomBytes(4).toString("hex");
     await group.save();
 
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite/${group.inviteCode}`;
+    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://flowsplit-sand.vercel.app"}/invite/${group.inviteCode}`;
 
     return NextResponse.json({
       data: {
