@@ -1,23 +1,21 @@
 import { ExtractedReceiptData } from "@/types";
 
-// ============================================================
-// OCR Receipt Parser
-// Uses Tesseract.js to extract text from receipt images
-// then applies regex heuristics to parse vendor/date/amount
-// ============================================================
+// extract text using tesseract and regex out the totals
 
-// Dynamic import to avoid SSR issues
-async function getTesseract() {
-  const Tesseract = await import("tesseract.js");
-  return Tesseract;
-}
-
-export async function extractTextFromImage(imageData: string | File | Blob): Promise<string> {
-  const Tesseract = await getTesseract();
-  const { data: { text } } = await Tesseract.recognize(imageData, "eng", {
-    logger: () => {}, // suppress progress logs
-  });
-  return text;
+export async function extractTextFromImage(imageData: string): Promise<string> {
+  // Tesseract.js v5+ uses createWorker pattern.
+  // We convert the base64 data URL to a Node.js Buffer for server-side usage.
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng", 1, { logger: () => {} });
+  try {
+    // Strip the data URL prefix (e.g. "data:image/jpeg;base64,") to get raw base64
+    const base64 = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
+    const buffer = Buffer.from(base64, "base64");
+    const { data: { text } } = await worker.recognize(buffer);
+    return text;
+  } finally {
+    await worker.terminate();
+  }
 }
 
 export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "rawText"> {
@@ -26,7 +24,7 @@ export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "r
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // --- Amount Extraction ---
+  // extract amount
   // Look for lines with "total", "amount", "grand total", etc.
   const amountPatterns = [
     /(?:grand\s+)?total[:\s]+(?:inr|rs\.?|₹|usd|\$|eur|€|gbp|£)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
@@ -58,7 +56,7 @@ export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "r
     }
   }
 
-  // --- Date Extraction ---
+  // extract date
   const datePatterns = [
     /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/,
     /(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})/,
@@ -75,7 +73,7 @@ export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "r
     }
   }
 
-  // --- Vendor Extraction ---
+  // extract vendor
   // Use the first non-empty line that's not a number/date as vendor
   const skipPatterns = /^[\d\s\/\-\.\$₹€£#*]+$/;
   let vendor: string | undefined;
@@ -86,7 +84,7 @@ export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "r
     }
   }
 
-  // --- Line Items Extraction ---
+  // extract line items
   const items: Array<{ name: string; price: number }> = [];
   const itemPattern = /^(.+?)\s+([0-9,]+(?:\.[0-9]{1,2})?)\s*$/;
   for (const line of lines) {
@@ -108,7 +106,7 @@ export function parseReceiptText(rawText: string): Omit<ExtractedReceiptData, "r
 }
 
 export async function processReceipt(
-  imageData: string | File | Blob
+  imageData: string
 ): Promise<ExtractedReceiptData> {
   const rawText = await extractTextFromImage(imageData);
   const parsed = parseReceiptText(rawText);

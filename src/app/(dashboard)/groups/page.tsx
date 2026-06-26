@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Plus, Search, Archive, Users, TrendingUp, X, Sparkles } from "lucide-react";
+import { Plus, Search, Archive, Users, TrendingUp, X, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -34,8 +34,7 @@ interface Group {
 
 const EMOJIS = ["🏖️", "🍱", "🏠", "🌆", "🍔", "🚗", "✈️", "🛍️", "🍕", "🎮"];
 
-function GroupCard({ group, index }: { group: Group; index: number }) {
-  // Demo mock balances for display if backend net balance solver isn't run yet
+function GroupCard({ group, index, onDelete }: { group: Group; index: number; onDelete: (id: string, name: string) => void }) {
   const myBalance = group.myBalance ?? 0;
   const isPositive = myBalance > 0;
   const isNegative = myBalance < 0;
@@ -45,13 +44,28 @@ function GroupCard({ group, index }: { group: Group; index: number }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08 }}
+      className="relative"
     >
-      <Link href={`/groups/${group._id}`}>
+      {/* Delete button — sits outside the link */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDelete(group._id, group.name);
+        }}
+        className="absolute top-3 right-3 z-10 w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[#475569] hover:text-[#f87171] hover:bg-red-500/10 hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100"
+        title="Delete group"
+        aria-label="Delete group"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+
+      <Link href={`/groups/${group._id}`} className="group block h-full">
         <Card
           variant="default"
           hover={true}
           padding="lg"
-          className="group border border-white/8 hover:border-[#6366f1]/30 transition-all h-full flex flex-col justify-between"
+          className="border border-white/8 hover:border-[#6366f1]/30 transition-all h-full flex flex-col justify-between"
         >
           <div>
             {/* Header */}
@@ -157,6 +171,28 @@ export default function GroupsPage() {
     },
   });
 
+  // Delete group mutation
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to delete group");
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      toast.success("Group deleted.");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete group.");
+    },
+  });
+
+  const handleDelete = (id: string, name: string) => {
+    if (confirm(`Delete "${name}" and all its expenses? This cannot be undone.`)) {
+      deleteGroupMutation.mutate(id);
+    }
+  };
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast.error("Group name is required");
@@ -187,15 +223,15 @@ export default function GroupsPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
       >
         <div>
-          <h1 className="text-2xl font-bold text-[#f8fafc]">Groups</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#f8fafc]">Groups</h1>
           <p className="text-[#64748b] text-sm mt-1">
             {isLoading ? "Loading groups..." : `${groups.length} active groups`}
           </p>
         </div>
-        <Button variant="gradient" size="md" id="create-group-btn" onClick={() => setIsCreateOpen(true)}>
+        <Button variant="gradient" size="md" id="create-group-btn" onClick={() => setIsCreateOpen(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4" />
           New Group
         </Button>
@@ -206,7 +242,7 @@ export default function GroupsPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex gap-3"
+        className="flex flex-col sm:flex-row gap-3"
       >
         <div className="flex-1">
           <Input
@@ -217,7 +253,7 @@ export default function GroupsPage() {
             id="groups-search"
           />
         </div>
-        <Button variant="secondary" size="md">
+        <Button variant="secondary" size="md" className="w-full sm:w-auto">
           <Archive className="w-4 h-4" />
           Archived
         </Button>
@@ -229,7 +265,7 @@ export default function GroupsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="grid grid-cols-3 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
         >
           {[
             { label: "Total Groups", value: groups.length, icon: Users, color: "text-[#818cf8]" },
@@ -260,7 +296,7 @@ export default function GroupsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((group, i) => (
-            <GroupCard key={group._id} group={group} index={i} />
+            <GroupCard key={group._id} group={group} index={i} onDelete={handleDelete} />
           ))}
           {filtered.length === 0 && (
             <div className="col-span-3 text-center py-12 text-[#475569] glass rounded-3xl border border-white/8">

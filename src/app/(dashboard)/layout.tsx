@@ -15,12 +15,11 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen bg-[#030712] flex">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main content */}
-      <div className="flex-1 ml-60 min-h-screen">
-        <main className="p-6 md:p-8 max-w-[1400px]">
+      {/* Main content — push right on desktop, add top/bottom padding for mobile bars */}
+      <div className="flex-1 lg:ml-60 min-h-screen pt-14 lg:pt-0 pb-16 lg:pb-0">
+        <main className="p-4 sm:p-6 md:p-8 max-w-[1400px]">
           {children}
         </main>
       </div>

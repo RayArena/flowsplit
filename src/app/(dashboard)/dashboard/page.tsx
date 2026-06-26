@@ -57,7 +57,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await fetch("/api/dashboard/stats");
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to fetch stats");
+      if (!res.ok) throw new Error(json.details || json.error || "Failed to fetch stats");
       return json.data;
     },
   });
@@ -77,10 +77,10 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between"
+        className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-[#f8fafc]">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#f8fafc]">
             {isClerkConfigured() ? (
               <DashboardGreeting />
             ) : (
@@ -91,25 +91,27 @@ export default function DashboardPage() {
             Here&apos;s your financial overview for this month.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Link href="/groups">
             <Button variant="secondary" size="sm">
               <Plus className="w-4 h-4" />
-              New Group
+              <span className="hidden sm:inline">New Group</span>
+              <span className="sm:hidden">Group</span>
             </Button>
           </Link>
           <Link href="/groups">
             <Button variant="gradient" size="sm">
               <Plus className="w-4 h-4" />
-              Add Expense
+              <span className="hidden sm:inline">Add Expense</span>
+              <span className="sm:hidden">Expense</span>
             </Button>
           </Link>
         </div>
       </motion.div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="col-span-2 lg:col-span-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="col-span-2 sm:col-span-1">
           <StatCard
             title="Total Spending"
             value={stats?.totalSpending || 0}
@@ -385,12 +387,12 @@ export default function DashboardPage() {
                     key={i}
                     className="flex items-center gap-2 p-3 rounded-xl bg-white/3 border border-white/5"
                   >
-                    <Avatar name={s.from} size="xs" />
+                    <Avatar name={s.payerName} size="xs" />
                     <span className="text-xs text-[#64748b] flex-shrink-0">→</span>
-                    <Avatar name={s.to} size="xs" />
+                    <Avatar name={s.receiverName} size="xs" />
                     <div className="flex-1 min-w-0 mx-1">
                       <span className="text-xs text-[#94a3b8] truncate block">
-                        {s.from} → {s.to}
+                        {s.payerName} → {s.receiverName}
                       </span>
                       <span className="text-[10px] text-[#475569] truncate block">
                         {s.groupName}

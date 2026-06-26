@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
   Background,
@@ -22,18 +22,21 @@ import {
   LayoutDashboard,
   X,
   Loader2,
-  Upload,
   Copy,
   Link2,
   RefreshCw,
   Check,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  Camera,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarGroup } from "@/components/ui/avatar";
-import { formatCurrency, formatRelativeTime, getCategoryIcon } from "@/lib/utils";
+import { formatCurrency, formatRelativeTime, getCategoryIcon, EXPENSE_CATEGORIES } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useGroupChannel } from "@/hooks/useGroupChannel";
 import { toast } from "sonner";
@@ -51,10 +54,13 @@ const TABS = [
 
 export default function GroupDetailPage() {
   const { id: groupId } = useParams() as { id: string };
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -119,6 +125,42 @@ export default function GroupDetailPage() {
     },
   });
 
+  // Delete Group Mutation
+  const deleteGroupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/groups/${groupId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to delete group");
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      toast.success("Group deleted successfully.");
+      router.push("/groups");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete group.");
+    },
+  });
+
+  // Delete Expense Mutation
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (expenseId: string) => {
+      const res = await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to delete expense");
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
+      toast.success("Expense deleted.");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete expense.");
+    },
+  });
+
   if (isGroupLoading || isExpensesLoading || isSettlementsLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
@@ -131,7 +173,7 @@ export default function GroupDetailPage() {
   if (!group) {
     return (
       <div className="text-center py-12 text-[#f87171] glass rounded-3xl border border-white/8">
-        Group not found or you don't have access.
+        Group not found or you don&apos;t have access.
       </div>
     );
   }
@@ -200,32 +242,37 @@ export default function GroupDetailPage() {
           </Button>
         </Link>
 
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1e293b] to-[#334155] border border-white/10 flex items-center justify-center text-3xl">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#1e293b] to-[#334155] border border-white/10 flex items-center justify-center text-2xl sm:text-3xl flex-shrink-0">
               {group.emoji || "🏖️"}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#f8fafc]">{group.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#f8fafc]">{group.name}</h1>
               <p className="text-[#64748b] text-sm mt-0.5">{group.description}</p>
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-2 sm:gap-3 mt-2">
                 <AvatarGroup users={group.members} max={5} size="xs" />
                 <span className="text-xs text-[#475569]">{group.members.length} members</span>
                 <Badge variant="brand">Active</Badge>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="secondary" size="sm" onClick={() => setIsInviteModalOpen(true)}>
               <UserPlus className="w-4 h-4" />
-              Invite
+              <span className="hidden sm:inline">Invite</span>
             </Button>
-            <Button variant="secondary" size="icon">
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={() => setIsDeleteModalOpen(true)}
+              title="Group Settings"
+            >
               <Settings className="w-4 h-4" />
             </Button>
-            <Button variant="gradient" size="sm" onClick={() => setIsExpenseModalOpen(true)}>
+            <Button variant="gradient" size="sm" onClick={() => { setEditingExpense(null); setIsExpenseModalOpen(true); }}>
               <Plus className="w-4 h-4" />
-              Add Expense
+              <span className="hidden sm:inline">Add Expense</span>
             </Button>
           </div>
         </div>
@@ -339,7 +386,7 @@ export default function GroupDetailPage() {
             <CardHeader className="mb-4">
               <div className="flex items-center justify-between">
                 <CardTitle>All Expenses ({expenses.length})</CardTitle>
-                <Button variant="gradient" size="sm" onClick={() => setIsExpenseModalOpen(true)}>
+                <Button variant="gradient" size="sm" onClick={() => { setEditingExpense(null); setIsExpenseModalOpen(true); }}>
                   <Plus className="w-4 h-4" /> Add
                 </Button>
               </div>
@@ -348,28 +395,51 @@ export default function GroupDetailPage() {
               {expenses.map((e: any) => (
                 <div
                   key={e._id}
-                  className="flex items-center gap-4 p-4 rounded-xl hover:bg-white/3 border border-transparent hover:border-white/8 transition-all cursor-pointer"
+                  className="flex items-center gap-4 p-4 rounded-xl hover:bg-white/3 border border-transparent hover:border-white/8 transition-all"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl">
+                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl flex-shrink-0">
                     {getCategoryIcon(e.category)}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-[#f8fafc]">{e.title}</div>
                     <div className="text-xs text-[#475569] mt-0.5">
-                      Paid by {e.paidByName} · {e.participants.length} participants · {formatRelativeTime(e.createdAt)}
+                      Paid by {e.paidByName} · {e.participants.length} people · {formatRelativeTime(e.createdAt)}
+                    </div>
+                    <div className="text-xs text-[#64748b] capitalize mt-0.5">
+                      Split: {e.splitType}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right mr-2">
                     <div className="text-sm font-bold text-[#f8fafc]">{formatCurrency(e.amount, group.currency)}</div>
                     <div className="text-xs text-[#475569]">
-                      {formatCurrency(e.amount / e.participants.length, group.currency)} each
+                      {formatCurrency(e.amount / Math.max(1, e.participants.length), group.currency)} each
                     </div>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => { setEditingExpense(e); setIsExpenseModalOpen(true); }}
+                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#6366f1]/20 border border-white/10 flex items-center justify-center text-[#64748b] hover:text-[#818cf8] transition-all"
+                      title="Edit expense"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${e.title}"? This cannot be undone.`)) {
+                          deleteExpenseMutation.mutate(e._id);
+                        }
+                      }}
+                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 flex items-center justify-center text-[#64748b] hover:text-[#f87171] transition-all"
+                      title="Delete expense"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
               {expenses.length === 0 && (
                 <div className="text-center py-10 text-[#475569] text-xs">
-                  This group has no expenses. Click "Add" to upload a receipt!
+                  This group has no expenses. Click &quot;Add&quot; to create one!
                 </div>
               )}
             </CardContent>
@@ -397,7 +467,7 @@ export default function GroupDetailPage() {
                         <div className="font-medium text-[#f8fafc] text-sm mb-1">{m.name}</div>
                         <div className="flex gap-4 text-xs text-[#64748b]">
                           <span>Paid: {formatCurrency(paid, group.currency)}</span>
-                          <span>Owed: {formatCurrency(owed, group.currency)}</span>
+                          <span>Owes: {formatCurrency(owed, group.currency)}</span>
                         </div>
                         {/* Balance bar */}
                         <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -462,9 +532,13 @@ export default function GroupDetailPage() {
                     <Avatar name={s.payerName} size="sm" />
                     <div className="flex-1">
                       <div className="text-sm text-[#f8fafc] font-medium">
-                        {s.payerName} <span className="text-[#475569]">→</span> {s.receiverName}
+                        <span className="text-[#f87171]">{s.payerName}</span>
+                        <span className="text-[#475569] mx-2">pays</span>
+                        <span className="text-[#4ade80]">{s.receiverName}</span>
                       </div>
-                      <div className="text-xs text-[#475569] mt-0.5">Settle balance debt</div>
+                      <div className="text-xs text-[#475569] mt-0.5">
+                        {s.payerName} owes {s.receiverName}
+                      </div>
                     </div>
                     <Avatar name={s.receiverName} size="sm" />
                     <div className="text-sm font-bold text-[#818cf8] mr-2">{formatCurrency(s.amount, group.currency)}</div>
@@ -487,7 +561,7 @@ export default function GroupDetailPage() {
                   </div>
                 ))}
                 {optimizedSettlements.length === 0 && (
-                  <p className="text-xs text-[#475569] text-center py-4">All debts are cleared! Well done.</p>
+                  <p className="text-xs text-[#475569] text-center py-4">🎉 All debts are cleared! Well done.</p>
                 )}
               </CardContent>
             </Card>
@@ -540,8 +614,8 @@ export default function GroupDetailPage() {
                   <div className="text-xs text-[#64748b]">Average Cost Per Person</div>
                 </div>
                 <div className="p-4 rounded-xl bg-white/3 text-center">
-                  <div className="text-3xl font-black text-[#fbbf24] mb-1">🍕</div>
-                  <div className="text-xs text-[#64748b]">Quick settlements active</div>
+                  <div className="text-3xl font-black text-[#fbbf24] mb-1">{group.members.length}</div>
+                  <div className="text-xs text-[#64748b]">Members</div>
                 </div>
               </div>
             </CardContent>
@@ -557,76 +631,257 @@ export default function GroupDetailPage() {
         groupName={group.name}
       />
 
-      {/* Add Expense Modal */}
+      {/* Add / Edit Expense Modal */}
       <AddExpenseModal
         isOpen={isExpenseModalOpen}
-        onClose={() => setIsExpenseModalOpen(false)}
+        onClose={() => { setIsExpenseModalOpen(false); setEditingExpense(null); }}
         group={group}
+        editingExpense={editingExpense}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
           queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
           setIsExpenseModalOpen(false);
+          setEditingExpense(null);
         }}
+      />
+
+      {/* Delete Group Confirmation Modal */}
+      <DeleteGroupModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        groupName={group.name}
+        onConfirm={() => deleteGroupMutation.mutate()}
+        isLoading={deleteGroupMutation.isPending}
       />
     </div>
   );
 }
 
-// Sub-Component: AddExpenseModal
+// modal to confirm group deletion
+function DeleteGroupModal({
+  isOpen,
+  onClose,
+  groupName,
+  onConfirm,
+  isLoading,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  groupName: string;
+  onConfirm: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#030712]/70 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-md bg-[#0f172a] border border-red-500/20 rounded-3xl p-6 shadow-2xl relative"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#ef4444] to-[#f97316] rounded-t-3xl" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-[#f87171]" />
+              </div>
+              <h2 className="text-lg font-bold text-[#f8fafc]">Delete Group</h2>
+            </div>
+            <p className="text-[#94a3b8] text-sm mb-2">
+              Are you sure you want to delete <span className="text-[#f8fafc] font-semibold">{groupName}</span>?
+            </p>
+            <p className="text-[#64748b] text-xs mb-6">
+              This will permanently delete the group and <strong className="text-[#f87171]">all expenses and settlements</strong> associated with it. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={onClose} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1 bg-red-500/10 border border-red-500/20 text-[#f87171] hover:bg-red-500/20"
+                onClick={onConfirm}
+                loading={isLoading}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// add or edit expense modal
+
+type SplitMode = "equal" | "exact" | "percentage";
+
 function AddExpenseModal({
   isOpen,
   onClose,
   group,
   onSuccess,
+  editingExpense,
 }: {
   isOpen: boolean;
   onClose: () => void;
   group: any;
   onSuccess: () => void;
+  editingExpense?: any;
 }) {
+  const isEditMode = !!editingExpense;
+
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("other");
   const [paidBy, setPaidBy] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [splitMode, setSplitMode] = useState<SplitMode>("equal");
+  // For exact/percentage: per-member overrides keyed by userId
+  const [memberSplits, setMemberSplits] = useState<Record<string, string>>({});
+  // Which members are included in equal split
+  const [includedMembers, setIncludedMembers] = useState<Set<string>>(new Set());
 
-  // Set default paidBy on open
-  if (group.members?.[0] && !paidBy) {
-    setPaidBy(group.members[0].userId);
-  }
+  // Populate form when editing or on open
+  useEffect(() => {
+    if (!isOpen) return;
+    if (editingExpense) {
+      setTitle(editingExpense.title || "");
+      setAmount(String(editingExpense.amount || ""));
+      setCategory(editingExpense.category || "other");
+      setPaidBy(editingExpense.paidBy || group.members?.[0]?.userId || "");
+      // Determine split mode
+      const st = editingExpense.splitType || "equal";
+      if (st === "exact") {
+        setSplitMode("exact");
+        const splits: Record<string, string> = {};
+        for (const p of editingExpense.participants || []) {
+          splits[p.userId] = String(p.share);
+        }
+        setMemberSplits(splits);
+        setIncludedMembers(new Set(editingExpense.participants?.map((p: any) => p.userId) || []));
+      } else if (st === "percentage") {
+        setSplitMode("percentage");
+        const splits: Record<string, string> = {};
+        for (const p of editingExpense.participants || []) {
+          const pct = editingExpense.amount > 0 ? Math.round((p.share / editingExpense.amount) * 100 * 100) / 100 : 0;
+          splits[p.userId] = String(pct);
+        }
+        setMemberSplits(splits);
+        setIncludedMembers(new Set(editingExpense.participants?.map((p: any) => p.userId) || []));
+      } else {
+        setSplitMode("equal");
+        setMemberSplits({});
+        setIncludedMembers(new Set(editingExpense.participants?.map((p: any) => p.userId) || []));
+      }
+    } else {
+      // Reset for new expense
+      setTitle("");
+      setAmount("");
+      setCategory("other");
+      setPaidBy(group.members?.[0]?.userId || "");
+      setSplitMode("equal");
+      setMemberSplits({});
+      setIncludedMembers(new Set(group.members?.map((m: any) => m.userId) || []));
+      setReceiptId(null);
+    }
+  }, [isOpen, editingExpense, group]);
 
-  // Split calculations (Simplified to equal splits)
-  const handleScanUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Re-init included members when group changes (new expense)
+  useEffect(() => {
+    if (!isOpen || editingExpense) return;
+    setIncludedMembers(new Set(group.members?.map((m: any) => m.userId) || []));
+  }, [group, isOpen, editingExpense]);
+
+  const parsedAmount = Number(amount) || 0;
+
+  // Compute participants list from split mode
+  const buildParticipants = (): { userId: string; name: string; share: number }[] | null => {
+    if (splitMode === "equal") {
+      const included = group.members.filter((m: any) => includedMembers.has(m.userId));
+      if (included.length === 0) return null;
+      const share = Math.round((parsedAmount / included.length) * 100) / 100;
+      return included.map((m: any) => ({ userId: m.userId, name: m.name, share }));
+    }
+    if (splitMode === "exact") {
+      const participants = group.members
+        .filter((m: any) => includedMembers.has(m.userId))
+        .map((m: any) => ({
+          userId: m.userId,
+          name: m.name,
+          share: Math.round((parseFloat(memberSplits[m.userId] || "0") || 0) * 100) / 100,
+        }));
+      const total = participants.reduce((s: number, p: any) => s + p.share, 0);
+      if (Math.abs(total - parsedAmount) > 0.5) return null; // validation fail
+      return participants;
+    }
+    if (splitMode === "percentage") {
+      const participants = group.members
+        .filter((m: any) => includedMembers.has(m.userId))
+        .map((m: any) => {
+          const pct = parseFloat(memberSplits[m.userId] || "0") || 0;
+          return {
+            userId: m.userId,
+            name: m.name,
+            share: Math.round((parsedAmount * pct / 100) * 100) / 100,
+          };
+        });
+      const totalPct = group.members
+        .filter((m: any) => includedMembers.has(m.userId))
+        .reduce((s: number, m: any) => s + (parseFloat(memberSplits[m.userId] || "0") || 0), 0);
+      if (Math.abs(totalPct - 100) > 0.5) return null; // validation fail
+      return participants;
+    }
+    return null;
+  };
+
+  // OCR: client-side Tesseract.js
+  const handleScanUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setIsScanning(true);
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = async () => {
-      try {
-        const base64 = reader.result as string;
-        const res = await fetch("/api/receipts/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64 }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Failed to scan receipt");
+    try {
+      // Dynamic import Tesseract (runs in browser only)
+      const Tesseract = await import("tesseract.js");
+      const { data: { text } } = await Tesseract.recognize(file, "eng", {
+        logger: () => {},
+      });
+      // Parse the OCR text client-side
+      const { parseReceiptText } = await import("@/features/ocr/receiptParser");
+      const parsed = parseReceiptText(text);
+      if (parsed.vendor) setTitle(parsed.vendor);
+      if (parsed.amount) setAmount(String(parsed.amount));
 
-        const parsed = json.data?.extractedData || {};
-        if (parsed.vendor) setTitle(parsed.vendor);
-        if (parsed.amount) setAmount(String(parsed.amount));
-        if (json.data?._id) setReceiptId(json.data._id);
+      // Save receipt record to backend (image + rawText only)
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result as string;
+          const res = await fetch("/api/receipts/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: base64, rawText: text }),
+          });
+          const json = await res.json();
+          if (json.data?._id) setReceiptId(json.data._id);
+        } catch {
+          // Non-critical — OCR still worked, just won't have receipt record
+        }
+      };
 
-        toast.success("Receipt parsed successfully! Autofilled vendor & amount.");
-      } catch (err: any) {
-        toast.error(err.message || "Scanning failed, please fill manually.");
-      } finally {
-        setIsScanning(false);
-      }
-    };
+      toast.success("Receipt scanned! Vendor & amount auto-filled.");
+    } catch (err: any) {
+      toast.error("OCR failed. Please fill in manually.");
+      console.error("OCR error:", err);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const createExpenseMutation = useMutation({
@@ -641,34 +896,47 @@ function AddExpenseModal({
       return json.data;
     },
     onSuccess: () => {
+      toast.success("Expense added!");
       onSuccess();
-      setTitle("");
-      setAmount("");
-      setCategory("other");
-      setReceiptId(null);
     },
-    onError: (err: any) => {
-      toast.error(err.message || "Failed to add expense.");
+    onError: (err: any) => { toast.error(err.message || "Failed to add expense."); },
+  });
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: async (expense: any) => {
+      const res = await fetch(`/api/expenses/${editingExpense._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(expense),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update expense");
+      return json.data;
     },
+    onSuccess: () => {
+      toast.success("Expense updated!");
+      onSuccess();
+    },
+    onError: (err: any) => { toast.error(err.message || "Failed to update expense."); },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !amount) return toast.error("Please fill in title and amount");
+    if (parsedAmount <= 0) return toast.error("Amount must be greater than 0");
 
-    const parsedAmount = Number(amount);
     const selectedPayer = group.members.find((m: any) => m.userId === paidBy);
     if (!selectedPayer) return toast.error("Select a payer");
 
-    // Equal split math: everyone in the group splits equally
-    const shareAmount = parsedAmount / group.members.length;
-    const participants = group.members.map((m: any) => ({
-      userId: m.userId,
-      name: m.name,
-      share: shareAmount,
-    }));
+    const participants = buildParticipants();
+    if (!participants) {
+      if (splitMode === "exact") return toast.error("Exact amounts must sum to the total amount");
+      if (splitMode === "percentage") return toast.error("Percentages must sum to 100%");
+      return toast.error("Please configure split correctly");
+    }
+    if (participants.length === 0) return toast.error("Please include at least one participant");
 
-    createExpenseMutation.mutate({
+    const payload = {
       groupId: group._id,
       title: title.trim(),
       amount: parsedAmount,
@@ -676,11 +944,31 @@ function AddExpenseModal({
       paidBy,
       paidByName: selectedPayer.name,
       participants,
-      splitType: "equal",
+      splitType: splitMode === "percentage" ? "percentage" : splitMode === "exact" ? "exact" : "equal",
       category,
       receiptId: receiptId || undefined,
-    });
+    };
+
+    if (isEditMode) {
+      updateExpenseMutation.mutate(payload);
+    } else {
+      createExpenseMutation.mutate(payload);
+    }
   };
+
+  const isPending = createExpenseMutation.isPending || updateExpenseMutation.isPending;
+
+  // Validation displays
+  const exactTotal = splitMode === "exact"
+    ? group.members
+        .filter((m: any) => includedMembers.has(m.userId))
+        .reduce((s: number, m: any) => s + (parseFloat(memberSplits[m.userId] || "0") || 0), 0)
+    : 0;
+  const pctTotal = splitMode === "percentage"
+    ? group.members
+        .filter((m: any) => includedMembers.has(m.userId))
+        .reduce((s: number, m: any) => s + (parseFloat(memberSplits[m.userId] || "0") || 0), 0)
+    : 0;
 
   return (
     <AnimatePresence>
@@ -705,32 +993,37 @@ function AddExpenseModal({
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] flex items-center justify-center">
                 <Receipt className="w-4 h-4 text-white" />
               </div>
-              <h2 className="text-xl font-bold text-[#f8fafc]">Add Group Expense</h2>
+              <h2 className="text-xl font-bold text-[#f8fafc]">
+                {isEditMode ? "Edit Expense" : "Add Group Expense"}
+              </h2>
             </div>
 
-            {/* OCR Scanner */}
-            <div className="mb-4 bg-white/3 border border-dashed border-white/10 rounded-2xl p-4 text-center relative hover:border-[#6366f1]/40 transition-colors">
-              {isScanning ? (
-                <div className="flex flex-col items-center justify-center py-2 gap-2">
-                  <Loader2 className="w-6 h-6 text-[#818cf8] animate-spin" />
-                  <span className="text-xs text-[#94a3b8] font-medium animate-pulse">Running AI OCR Receipt Scan...</span>
-                </div>
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center justify-center py-2 gap-1.5">
-                  <Upload className="w-5 h-5 text-[#818cf8]" />
-                  <span className="text-xs text-[#94a3b8] font-medium">Scan Receipt to Autofill</span>
-                  <span className="text-[10px] text-[#475569]">Supports PNG, JPG, WebP</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleScanUpload}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
+            {/* OCR Scanner (only for new expenses) */}
+            {!isEditMode && (
+              <div className="mb-4 bg-white/3 border border-dashed border-white/10 rounded-2xl p-3 text-center relative hover:border-[#6366f1]/40 transition-colors">
+                {isScanning ? (
+                  <div className="flex flex-col items-center justify-center py-1 gap-1.5">
+                    <Loader2 className="w-5 h-5 text-[#818cf8] animate-spin" />
+                    <span className="text-xs text-[#94a3b8] font-medium animate-pulse">Scanning receipt with AI OCR...</span>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex items-center justify-center gap-3 py-1">
+                    <Camera className="w-4 h-4 text-[#818cf8]" />
+                    <span className="text-xs text-[#94a3b8] font-medium">Scan Receipt to Auto-fill</span>
+                    <span className="text-[10px] text-[#475569] bg-white/5 px-2 py-0.5 rounded-full">PNG · JPG · WebP</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleScanUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1">
+              {/* Title + Amount */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-[#64748b] uppercase tracking-wider block mb-1">
@@ -761,6 +1054,7 @@ function AddExpenseModal({
                 </div>
               </div>
 
+              {/* Paid By + Category */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-[#64748b] uppercase tracking-wider block mb-1">
@@ -772,9 +1066,7 @@ function AddExpenseModal({
                     className="w-full h-10 rounded-xl bg-[#1e293b] border border-white/10 text-[#f8fafc] text-sm px-3 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40"
                   >
                     {group.members.map((m: any) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.name}
-                      </option>
+                      <option key={m.userId} value={m.userId}>{m.name}</option>
                     ))}
                   </select>
                 </div>
@@ -787,44 +1079,172 @@ function AddExpenseModal({
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full h-10 rounded-xl bg-[#1e293b] border border-white/10 text-[#f8fafc] text-sm px-3 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40"
                   >
-                    <option value="food">🍕 Food & Drinks</option>
-                    <option value="transport">🚕 Transport</option>
-                    <option value="accommodation">🏠 Accommodation</option>
-                    <option value="entertainment">🎬 Entertainment</option>
-                    <option value="utilities">⚡ Utilities</option>
-                    <option value="other">📁 Other</option>
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              <div className="p-3 bg-white/3 border border-white/8 rounded-2xl text-xs space-y-1">
-                <span className="text-[#64748b] block font-semibold mb-1 uppercase tracking-wider">Split Details</span>
-                <p className="text-[#94a3b8]">
-                  Splitting **Equally** among all {group.members.length} members.
-                </p>
-                {amount && (
-                  <p className="text-[#818cf8] font-bold">
-                    Each person owes: {formatCurrency(Number(amount) / group.members.length, group.currency)}
-                  </p>
+              {/* Split Type Selector */}
+              <div>
+                <label className="text-xs font-semibold text-[#64748b] uppercase tracking-wider block mb-2">
+                  Split Method
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["equal", "exact", "percentage"] as SplitMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setSplitMode(mode)}
+                      className={`py-2 rounded-xl text-xs font-semibold border transition-all ${
+                        splitMode === mode
+                          ? "bg-[#6366f1] border-[#6366f1] text-white"
+                          : "bg-white/5 border-white/10 text-[#64748b] hover:border-[#6366f1]/40"
+                      }`}
+                    >
+                      {mode === "equal" ? "⚖️ Equal" : mode === "exact" ? "✏️ Exact" : "% Percent"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Split Details */}
+              <div className="p-3 bg-white/3 border border-white/8 rounded-2xl space-y-2">
+                <span className="text-[#64748b] text-xs font-semibold uppercase tracking-wider block mb-2">
+                  {splitMode === "equal" ? "Equal Split" : splitMode === "exact" ? "Exact Amounts" : "Percentages"}
+                </span>
+
+                {splitMode === "equal" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[#94a3b8]">Select who is splitting this expense:</p>
+                    {group.members.map((m: any) => {
+                      const included = includedMembers.has(m.userId);
+                      const count = includedMembers.size;
+                      const share = count > 0 && included ? Math.round((parsedAmount / count) * 100) / 100 : 0;
+                      return (
+                        <div key={m.userId} className="flex items-center justify-between">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={included}
+                              onChange={(e) => {
+                                const next = new Set(includedMembers);
+                                if (e.target.checked) next.add(m.userId); else next.delete(m.userId);
+                                setIncludedMembers(next);
+                              }}
+                              className="w-4 h-4 rounded accent-[#6366f1]"
+                            />
+                            <span className="text-sm text-[#f8fafc]">{m.name}</span>
+                          </label>
+                          <span className="text-xs text-[#818cf8] font-semibold">
+                            {included && parsedAmount > 0 ? formatCurrency(share, group.currency) : "-"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {parsedAmount > 0 && (
+                      <p className="text-xs text-[#64748b] pt-1 border-t border-white/5">
+                        {includedMembers.size} people · {formatCurrency(Math.round((parsedAmount / Math.max(1, includedMembers.size)) * 100) / 100, group.currency)} each
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {splitMode === "exact" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[#94a3b8] mb-1">Enter exact amount each person owes:</p>
+                    {group.members.map((m: any) => {
+                      const included = includedMembers.has(m.userId);
+                      return (
+                        <div key={m.userId} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            onChange={(e) => {
+                              const next = new Set(includedMembers);
+                              if (e.target.checked) next.add(m.userId); else { next.delete(m.userId); setMemberSplits(prev => { const n = {...prev}; delete n[m.userId]; return n; }); }
+                              setIncludedMembers(next);
+                            }}
+                            className="w-4 h-4 rounded accent-[#6366f1]"
+                          />
+                          <span className="text-sm text-[#f8fafc] flex-1">{m.name}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={memberSplits[m.userId] || ""}
+                            disabled={!included}
+                            onChange={(e) => setMemberSplits(prev => ({ ...prev, [m.userId]: e.target.value }))}
+                            className="w-24 h-8 rounded-lg bg-[#1e293b] border border-white/10 text-[#f8fafc] text-sm px-2 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 disabled:opacity-30"
+                          />
+                        </div>
+                      );
+                    })}
+                    <div className={`flex justify-between text-xs pt-1 border-t border-white/5 font-semibold ${Math.abs(exactTotal - parsedAmount) < 0.5 ? "text-[#4ade80]" : "text-[#f87171]"}`}>
+                      <span>Total entered</span>
+                      <span>{formatCurrency(exactTotal, group.currency)} / {parsedAmount > 0 ? formatCurrency(parsedAmount, group.currency) : "—"}</span>
+                    </div>
+                  </div>
+                )}
+
+                {splitMode === "percentage" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[#94a3b8] mb-1">Enter % each person owes (must total 100%):</p>
+                    {group.members.map((m: any) => {
+                      const included = includedMembers.has(m.userId);
+                      const pct = parseFloat(memberSplits[m.userId] || "0") || 0;
+                      const share = parsedAmount > 0 ? Math.round((parsedAmount * pct / 100) * 100) / 100 : 0;
+                      return (
+                        <div key={m.userId} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            onChange={(e) => {
+                              const next = new Set(includedMembers);
+                              if (e.target.checked) next.add(m.userId); else { next.delete(m.userId); setMemberSplits(prev => { const n = {...prev}; delete n[m.userId]; return n; }); }
+                              setIncludedMembers(next);
+                            }}
+                            className="w-4 h-4 rounded accent-[#6366f1]"
+                          />
+                          <span className="text-sm text-[#f8fafc] flex-1">{m.name}</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.1"
+                              placeholder="0"
+                              value={memberSplits[m.userId] || ""}
+                              disabled={!included}
+                              onChange={(e) => setMemberSplits(prev => ({ ...prev, [m.userId]: e.target.value }))}
+                              className="w-16 h-8 rounded-lg bg-[#1e293b] border border-white/10 text-[#f8fafc] text-sm px-2 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 disabled:opacity-30"
+                            />
+                            <span className="text-xs text-[#64748b]">%</span>
+                            {included && parsedAmount > 0 && (
+                              <span className="text-xs text-[#818cf8] w-20 text-right">≈ {formatCurrency(share, group.currency)}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className={`flex justify-between text-xs pt-1 border-t border-white/5 font-semibold ${Math.abs(pctTotal - 100) < 0.5 ? "text-[#4ade80]" : "text-[#f87171]"}`}>
+                      <span>Total %</span>
+                      <span>{pctTotal.toFixed(1)}% / 100%</span>
+                    </div>
+                  </div>
                 )}
               </div>
 
               <div className="pt-2 flex gap-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={onClose}
-                >
+                <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   variant="gradient"
                   className="flex-1 shadow-lg shadow-[#6366f1]/20"
-                  loading={createExpenseMutation.isPending}
+                  loading={isPending}
                 >
-                  Add Expense
+                  {isEditMode ? "Update Expense" : "Add Expense"}
                 </Button>
               </div>
             </form>
@@ -835,7 +1255,7 @@ function AddExpenseModal({
   );
 }
 
-// Sub-Component: InviteModal
+// modal to invite new members to group
 function InviteModal({
   isOpen,
   onClose,
@@ -924,7 +1344,6 @@ function InviteModal({
               </div>
             ) : inviteData?.inviteUrl ? (
               <div className="space-y-4">
-                {/* Invite link display */}
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-[#1e293b] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-[#94a3b8] font-mono truncate">
                     {inviteData.inviteUrl}
@@ -941,7 +1360,6 @@ function InviteModal({
                   </button>
                 </div>
 
-                {/* Regenerate */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#475569]">
                     Code: <code className="text-[#818cf8]">{inviteData.inviteCode}</code>

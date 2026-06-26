@@ -75,11 +75,19 @@ export async function DELETE(_req: Request, { params }: Params) {
     const group = await Group.findOne({ _id: id, createdBy: userId });
     if (!group) return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
 
-    // Archive instead of delete
-    group.isArchived = true;
-    await group.save();
+    // Cascade delete all related data
+    const [Expense, Settlement] = await Promise.all([
+      import("@/models/Expense").then((m) => m.default),
+      import("@/models/Settlement").then((m) => m.default),
+    ]);
 
-    return NextResponse.json({ message: "Group archived" });
+    await Promise.all([
+      Expense.deleteMany({ groupId: id }),
+      Settlement.deleteMany({ groupId: id }),
+      group.deleteOne(),
+    ]);
+
+    return NextResponse.json({ message: "Group deleted" });
   } catch (error) {
     console.error("DELETE /api/groups/[id]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

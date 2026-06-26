@@ -1,7 +1,4 @@
-// ============================================================
-// FlowSplit — Central TypeScript Types
-// ============================================================
-
+// core types
 export interface User {
   _id: string;
   clerkId: string;
@@ -105,10 +102,7 @@ export interface Receipt {
   createdAt: string;
 }
 
-// ============================================================
-// Balance Engine Types
-// ============================================================
-
+// settlement calculations
 export interface UserBalance {
   userId: string;
   name: string;
@@ -142,10 +136,7 @@ export interface OptimizationResult {
   reductionPercentage: number;
 }
 
-// ============================================================
-// Dashboard Types
-// ============================================================
-
+// UI stats
 export interface DashboardStats {
   totalSpending: number;
   activeGroups: number;
@@ -178,10 +169,7 @@ export interface RecentActivity {
   createdAt: string;
 }
 
-// ============================================================
-// API Response Types
-// ============================================================
-
+// API formats
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -196,10 +184,7 @@ export interface PaginatedResponse<T> {
   hasMore: boolean;
 }
 
-// ============================================================
-// Form Types
-// ============================================================
-
+// form inputs
 export interface CreateGroupForm {
   name: string;
   description?: string;

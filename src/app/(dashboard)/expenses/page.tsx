@@ -59,16 +59,16 @@ export default function ExpensesPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
       >
         <div>
-          <h1 className="text-2xl font-bold text-[#f8fafc]">Expenses</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#f8fafc]">Expenses</h1>
           <p className="text-[#64748b] text-sm mt-1">
             {filtered.length} expenses · {formatCurrency(total)} total
           </p>
         </div>
         <Link href="/groups">
-          <Button variant="gradient" size="md" id="add-expense-btn">
+          <Button variant="gradient" size="md" id="add-expense-btn" className="w-full sm:w-auto">
             <Plus className="w-4 h-4" />
             Add Expense
           </Button>
@@ -80,7 +80,7 @@ export default function ExpensesPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex gap-3"
+        className="flex flex-col sm:flex-row gap-3"
       >
         <div className="flex-1">
           <Input
@@ -91,7 +91,7 @@ export default function ExpensesPage() {
             id="expense-search"
           />
         </div>
-        <Button variant="secondary" size="md">
+        <Button variant="secondary" size="md" className="w-full sm:w-auto">
           <Filter className="w-4 h-4" />
           Filter
         </Button>
@@ -133,11 +133,11 @@ export default function ExpensesPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="group flex items-center gap-4 p-4 rounded-2xl bg-[#0f172a] border border-white/8 hover:border-[#6366f1]/30 transition-all cursor-pointer"
+            className="group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-[#0f172a] border border-white/8 hover:border-[#6366f1]/30 transition-all cursor-pointer"
           >
             {/* Category icon */}
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 border"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center text-lg sm:text-xl flex-shrink-0 border"
               style={{
                 backgroundColor: `${getCategoryColor(expense.category)}10`,
                 borderColor: `${getCategoryColor(expense.category)}20`,
@@ -156,20 +156,20 @@ export default function ExpensesPage() {
                   {SPLIT_TYPE_LABELS[expense.splitType] || "Equal"}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <Avatar name={expense.paidByName} size="xs" />
                   <span className="text-xs text-[#475569]">
                     Paid by {expense.paidByName}
                   </span>
                 </div>
-                <span className="text-[#334155] text-xs">·</span>
-                <span className="text-xs text-[#475569]">{expense.groupName || "Group"}</span>
-                <span className="text-[#334155] text-xs">·</span>
-                <span className="text-xs text-[#475569]">
+                <span className="text-[#334155] text-xs hidden sm:inline">·</span>
+                <span className="text-xs text-[#475569] hidden sm:inline">{expense.groupName || "Group"}</span>
+                <span className="text-[#334155] text-xs hidden sm:inline">·</span>
+                <span className="text-xs text-[#475569] hidden sm:inline">
                   {expense.participants?.length || 1} people
                 </span>
-                <span className="text-[#334155] text-xs">·</span>
+                <span className="text-[#334155] text-xs hidden sm:inline">·</span>
                 <span className="text-xs text-[#475569]">
                   {formatRelativeTime(expense.createdAt)}
                 </span>
@@ -181,7 +181,7 @@ export default function ExpensesPage() {
               <div className="text-sm font-bold text-[#f8fafc]">
                 {formatCurrency(expense.amount, expense.currency)}
               </div>
-              <div className="text-xs text-[#475569]">
+              <div className="text-xs text-[#475569] hidden sm:block">
                 {formatCurrency(expense.amount / Math.max(1, expense.participants?.length || 1), expense.currency)} each
               </div>
             </div>

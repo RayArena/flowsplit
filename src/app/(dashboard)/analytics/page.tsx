@@ -85,21 +85,21 @@ export default function AnalyticsPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-[#f8fafc]">Analytics</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#f8fafc]">Analytics</h1>
           <p className="text-[#64748b] text-sm mt-1">
             Deep insights into your spending patterns.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#0f172a] border border-white/8 rounded-xl p-1">
+        <div className="flex items-center overflow-x-auto pb-1">
+          <div className="flex items-center bg-[#0f172a] border border-white/8 rounded-xl p-1 flex-shrink-0">
             {DATE_RANGES.map((range) => (
               <button
                 key={range}
                 onClick={() => setDateRange(range)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                   dateRange === range
                     ? "bg-[#6366f1]/20 text-[#818cf8]"
                     : "text-[#475569] hover:text-[#94a3b8]"
@@ -113,7 +113,7 @@ export default function AnalyticsPage() {
       </motion.div>
 
       {/* Top metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           {
             label: "Total Spent",

@@ -150,73 +150,99 @@ export function Hero() {
 
           <div className="relative glass rounded-3xl p-1 border border-white/10">
             {/* Fake browser chrome */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/8">
+            <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 border-b border-white/8">
               <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-[#ef4444]/60" />
-                <div className="w-3 h-3 rounded-full bg-[#f59e0b]/60" />
-                <div className="w-3 h-3 rounded-full bg-[#22c55e]/60" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#ef4444]/60" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#f59e0b]/60" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#22c55e]/60" />
               </div>
-              <div className="flex-1 mx-4 h-6 rounded-lg bg-white/5 flex items-center px-3">
-                <span className="text-xs text-[#475569]">flowsplit.app/dashboard</span>
+              <div className="flex-1 mx-2 sm:mx-4 h-5 sm:h-6 rounded-lg bg-white/5 flex items-center px-2 sm:px-3">
+                <span className="text-[10px] sm:text-xs text-[#475569]">flowsplit.app/dashboard</span>
               </div>
             </div>
 
-            {/* Mock dashboard */}
-            <div className="p-6 grid grid-cols-12 gap-4 min-h-[320px]">
-              {/* Sidebar */}
-              <div className="col-span-2 space-y-2">
-                {["Dashboard", "Groups", "Expenses", "Analytics", "Settle"].map((item, i) => (
-                  <div
-                    key={item}
-                    className={`h-8 rounded-lg flex items-center px-2 ${i === 0 ? "bg-[#6366f1]/20 border border-[#6366f1]/30" : "bg-white/3"}`}
-                  >
-                    <div className={`text-xs ${i === 0 ? "text-[#818cf8]" : "text-[#475569]"}`}>{item}</div>
+            {/* Mock dashboard — full layout on md+, stacked cards on mobile */}
+            <div className="p-3 sm:p-6">
+              {/* Mobile: stacked stat cards */}
+              <div className="grid grid-cols-2 gap-2 sm:hidden mb-3">
+                {[
+                  { label: "Net Balance", value: "+₹2,400", color: "text-[#4ade80]" },
+                  { label: "Owed to you", value: "₹5,200", color: "text-[#818cf8]" },
+                  { label: "You owe", value: "₹2,800", color: "text-[#f87171]" },
+                  { label: "Active Groups", value: "6", color: "text-[#fbbf24]" },
+                ].map((s) => (
+                  <div key={s.label} className="bg-white/3 rounded-xl p-2.5">
+                    <div className="text-[9px] text-[#475569] mb-1">{s.label}</div>
+                    <div className={`text-sm font-bold ${s.color}`}>{s.value}</div>
                   </div>
                 ))}
               </div>
+              <div className="sm:hidden bg-white/3 rounded-xl p-3">
+                <div className="text-[9px] text-[#475569] mb-2">Spending Trend</div>
+                <div className="flex items-end gap-1 h-14">
+                  {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
+                    <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, background: i === 5 ? "#6366f1" : "rgba(99,102,241,0.2)" }} />
+                  ))}
+                </div>
+              </div>
 
-              {/* Main content */}
-              <div className="col-span-10 space-y-4">
-                {/* Stat row */}
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: "Net Balance", value: "+₹2,400", color: "text-[#4ade80]" },
-                    { label: "Owed to you", value: "₹5,200", color: "text-[#818cf8]" },
-                    { label: "You owe", value: "₹2,800", color: "text-[#f87171]" },
-                    { label: "Active Groups", value: "6", color: "text-[#fbbf24]" },
-                  ].map((s) => (
-                    <div key={s.label} className="bg-white/3 rounded-xl p-3">
-                      <div className="text-[10px] text-[#475569] mb-1">{s.label}</div>
-                      <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
+              {/* Desktop: full sidebar + content layout */}
+              <div className="hidden sm:grid grid-cols-12 gap-4 min-h-[320px]">
+                {/* Sidebar */}
+                <div className="col-span-2 space-y-2">
+                  {["Dashboard", "Groups", "Expenses", "Analytics", "Settle"].map((item, i) => (
+                    <div
+                      key={item}
+                      className={`h-8 rounded-lg flex items-center px-2 ${i === 0 ? "bg-[#6366f1]/20 border border-[#6366f1]/30" : "bg-white/3"}`}
+                    >
+                      <div className={`text-xs ${i === 0 ? "text-[#818cf8]" : "text-[#475569]"}`}>{item}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Chart + activity row */}
-                <div className="grid grid-cols-5 gap-3">
-                  <div className="col-span-3 bg-white/3 rounded-xl p-3 h-32 flex flex-col gap-2">
-                    <div className="text-[10px] text-[#475569]">Spending Trend</div>
-                    <div className="flex-1 flex items-end gap-1">
-                      {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                        <div
-                          key={i}
-                          className="flex-1 rounded-t"
-                          style={{
-                            height: `${h}%`,
-                            background: i === 5 ? "#6366f1" : "rgba(99,102,241,0.2)",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="col-span-2 bg-white/3 rounded-xl p-3 space-y-2">
-                    <div className="text-[10px] text-[#475569]">Recent Activity</div>
-                    {["Trip to Goa", "Team Lunch", "Uber Share"].map((a) => (
-                      <div key={a} className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-md bg-[#6366f1]/30" />
-                        <div className="text-[10px] text-[#64748b]">{a}</div>
+                {/* Main content */}
+                <div className="col-span-10 space-y-4">
+                  {/* Stat row */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: "Net Balance", value: "+₹2,400", color: "text-[#4ade80]" },
+                      { label: "Owed to you", value: "₹5,200", color: "text-[#818cf8]" },
+                      { label: "You owe", value: "₹2,800", color: "text-[#f87171]" },
+                      { label: "Active Groups", value: "6", color: "text-[#fbbf24]" },
+                    ].map((s) => (
+                      <div key={s.label} className="bg-white/3 rounded-xl p-3">
+                        <div className="text-[10px] text-[#475569] mb-1">{s.label}</div>
+                        <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Chart + activity row */}
+                  <div className="grid grid-cols-5 gap-3">
+                    <div className="col-span-3 bg-white/3 rounded-xl p-3 h-32 flex flex-col gap-2">
+                      <div className="text-[10px] text-[#475569]">Spending Trend</div>
+                      <div className="flex-1 flex items-end gap-1">
+                        {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
+                          <div
+                            key={i}
+                            className="flex-1 rounded-t"
+                            style={{
+                              height: `${h}%`,
+                              background: i === 5 ? "#6366f1" : "rgba(99,102,241,0.2)",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-2 bg-white/3 rounded-xl p-3 space-y-2">
+                      <div className="text-[10px] text-[#475569]">Recent Activity</div>
+                      {["Trip to Goa", "Team Lunch", "Uber Share"].map((a) => (
+                        <div key={a} className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded-md bg-[#6366f1]/30" />
+                          <div className="text-[10px] text-[#64748b]">{a}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

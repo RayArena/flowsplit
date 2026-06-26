@@ -32,14 +32,14 @@ export async function GET() {
     for (const expense of expenses) {
       if (expense.paidBy === userId) {
         // User paid, others owe user
-        for (const p of expense.participants) {
+        for (const p of expense.participants || []) {
           if (p.userId !== userId) {
             totalReceivable += p.share;
           }
         }
       } else {
         // User is a participant, owes payer
-        const userParticipant = expense.participants.find((p: { userId: string }) => p.userId === userId);
+        const userParticipant = (expense.participants || []).find((p: { userId: string }) => p.userId === userId);
         if (userParticipant) {
           totalOwed += userParticipant.share;
         }
@@ -163,14 +163,14 @@ export async function GET() {
     const finalRecentActivity = recentActivity.slice(0, 5);
 
     // Suggested / Smart Settlements (current user's debts/receivables optimized)
-    const suggestedSettlements: Array<{ from: string; to: string; amount: number; groupName: string }> = [];
+    const suggestedSettlements: Array<{ payerName: string; receiverName: string; amount: number; groupName: string }> = [];
     let totalOptimizedPaymentsCount = 0;
     let totalRawTransactionsCount = 0;
 
     for (const g of groups) {
       const groupExpenses = expenses.filter((e) => String(e.groupId) === String(g._id));
       const groupSettlements = settlements.filter((s) => String(s.groupId) === String(g._id));
-      const groupMembers = g.members.map((m: any) => ({
+      const groupMembers = (g.members || []).map((m: any) => ({
         userId: m.userId,
         name: m.name,
         avatar: m.avatar,
@@ -204,8 +204,8 @@ export async function GET() {
       for (const s of optResult.optimizedSettlements) {
         if (s.payer === userId || s.receiver === userId) {
           suggestedSettlements.push({
-            from: s.payer === userId ? "You" : s.payerName,
-            to: s.receiver === userId ? "You" : s.receiverName,
+            payerName: s.payer === userId ? "You" : s.payerName,
+            receiverName: s.receiver === userId ? "You" : s.receiverName,
             amount: s.amount,
             groupName: g.name,
           });
@@ -228,8 +228,8 @@ export async function GET() {
         totalRawTransactionsCount,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET /api/dashboard/stats", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error", details: error.message, stack: error.stack }, { status: 500 });
   }
 }

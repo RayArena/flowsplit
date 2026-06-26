@@ -50,14 +50,14 @@ export async function GET() {
       // If user paid, they're owed by others (positive balance contribution)
       if (e.paidBy === userId) {
         // User paid the full amount, but owes their own share
-        const userShare = e.participants.find(
+        const userShare = (e.participants || []).find(
           (p: { userId: string }) => p.userId === userId
         );
         groupBalanceMap[gid] =
           (groupBalanceMap[gid] || 0) + e.amount - (userShare?.share || 0);
       } else {
         // User is a participant — they owe their share
-        const userShare = e.participants.find(
+        const userShare = (e.participants || []).find(
           (p: { userId: string }) => p.userId === userId
         );
         if (userShare) {

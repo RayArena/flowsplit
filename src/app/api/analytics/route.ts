@@ -42,7 +42,7 @@ export async function GET(_req: Request) {
 
     const now = new Date();
 
-    // ------- SPENDING TREND (last 7 months, personal vs group) -------
+    // calculate spending trend over the last 7 months
     const spendingTrend = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -68,7 +68,7 @@ export async function GET(_req: Request) {
       });
     }
 
-    // ------- CATEGORY DISTRIBUTION -------
+    // group expenses by category
     const categoryColorMap: Record<string, string> = {
       food: "#f97316",
       transport: "#3b82f6",
@@ -108,7 +108,7 @@ export async function GET(_req: Request) {
       .filter((c) => c.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    // ------- MEMBER CONTRIBUTIONS -------
+    // calculate total contributions per member
     // Aggregate across all groups: how much each member paid vs how much they owe
     const memberPaid: Record<string, { name: string; paid: number; owed: number }> = {};
 
@@ -141,7 +141,7 @@ export async function GET(_req: Request) {
       .sort((a, b) => b.paid - a.paid)
       .slice(0, 10);
 
-    // ------- YEAR-OVER-YEAR COMPARISON -------
+    // compare year over year spending
     const yearComparison = [];
     const thisYear = now.getFullYear();
     for (let month = 0; month < 7; month++) {
@@ -171,7 +171,7 @@ export async function GET(_req: Request) {
       });
     }
 
-    // ------- TOP METRICS -------
+    // calculate high level stats
     const totalSpent = totalExpenseAmount;
     const monthsWithExpenses = new Set(
       allExpenses.map((e) => {

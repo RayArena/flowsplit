@@ -1,9 +1,6 @@
 import { Expense, UserBalance, DebtEdge, OptimizedSettlement, OptimizationResult } from "@/types";
 
-// ============================================================
-// Balance Engine — Min-Cash-Flow Algorithm
-// Calculates net balances and minimizes transaction count
-// ============================================================
+// minimum cash flow algorithm to simplify debts
 
 interface SettlementRecord {
   payer: string;
@@ -37,7 +34,7 @@ export function calculateBalances(
     }
 
     // Debit each participant their share
-    for (const participant of expense.participants) {
+    for (const participant of expense.participants || []) {
       if (balanceMap[participant.userId]) {
         balanceMap[participant.userId].owed += participant.share;
       }
@@ -61,22 +58,21 @@ export function calculateBalances(
 
   return members.map((member) => {
     const b = balanceMap[member.userId] ?? { paid: 0, owed: 0 };
+    const rawNet = Math.round((b.paid - b.owed) * 100) / 100;
+    // Apply near-zero threshold: treat anything within ±0.005 as exactly 0
+    const netBalance = Math.abs(rawNet) < 0.005 ? 0 : rawNet;
     return {
       userId: member.userId,
       name: member.name,
       avatar: member.avatar,
-      totalPaid: b.paid,
-      totalOwed: b.owed,
-      netBalance: Math.round((b.paid - b.owed) * 100) / 100,
+      totalPaid: Math.round(b.paid * 100) / 100,
+      totalOwed: Math.round(b.owed * 100) / 100,
+      netBalance,
     };
   });
 }
 
-// ============================================================
-// Debt Graph
-// Generates a directed weighted graph from raw balances
-// (before optimization)
-// ============================================================
+// build raw debt graph before optimization
 
 export function buildDebtGraph(
   expenses: Expense[],
@@ -86,7 +82,7 @@ export function buildDebtGraph(
   const edges: DebtEdge[] = [];
 
   for (const expense of expenses) {
-    for (const participant of expense.participants) {
+    for (const participant of expense.participants || []) {
       if (participant.userId === expense.paidBy) continue;
       if (participant.share <= 0) continue;
 
@@ -114,22 +110,7 @@ export function buildDebtGraph(
   return Object.values(edgeMap);
 }
 
-// ============================================================
-// Min-Cash-Flow Settlement Optimizer
-//
-// Algorithm (Minimum Cash Flow):
-// 1. Compute net balance for each person
-// 2. Separate into creditors (net > 0) and debtors (net < 0)
-// 3. Sort creditors descending, debtors ascending (by absolute value)
-// 4. Match the largest creditor with the largest debtor
-// 5. Settle min(creditor_amount, |debtor_amount|)
-// 6. This cancels one side completely each iteration
-// 7. Repeat until all balances are zero
-//
-// Result: At most (n-1) transactions for n people
-// This minimizes both the number of transactions AND
-// the total cash flow through the system.
-// ============================================================
+// greedy settlement optimizer that matches max creditor with max debtor
 
 export function optimizeSettlements(balances: UserBalance[]): OptimizedSettlement[] {
   const EPSILON = 0.01; // ignore rounding dust
@@ -185,9 +166,7 @@ export function optimizeSettlements(balances: UserBalance[]): OptimizedSettlemen
   return settlements;
 }
 
-// ============================================================
-// Generate full optimization result with metadata
-// ============================================================
+// helper to generate the final settlement plan
 
 export function generateOptimizationResult(
   expenses: Expense[],
@@ -212,10 +191,7 @@ export function generateOptimizationResult(
   };
 }
 
-// ============================================================
-// Smart Settlement Simulator
-// Projects what happens if a specific settlement is made
-// ============================================================
+// simulate what happens if a user pays a debt
 
 export function simulateSettlement(
   currentBalances: UserBalance[],
